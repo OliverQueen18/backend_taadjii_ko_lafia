@@ -107,14 +107,16 @@ pipeline {
           usernameVariable: 'DOCKER_USER',
           passwordVariable: 'DOCKER_PASS'
         )]) {
-          sh """
-            echo ${DOCKER_PASS} | docker login ${DOCKER_REGISTRY} -u ${DOCKER_USER} --password-stdin
-            docker push ${DOCKER_IMAGE_FULL}:${env.GIT_COMMIT_SHORT}
-            docker push ${DOCKER_IMAGE_FULL}:latest
-            docker push ${DOCKER_IMAGE_FULL}:${params.DEPLOY_ENV}
-            docker push ${DOCKER_IMAGE_FULL}:${env.DOCKER_TAG}
-            docker logout
-          """
+          script {
+            sh """
+              echo "\$DOCKER_PASS" | docker login docker.io -u "\$DOCKER_USER" --password-stdin
+              docker push ${DOCKER_IMAGE_FULL}:${env.GIT_COMMIT_SHORT}
+              docker push ${DOCKER_IMAGE_FULL}:latest
+              docker push ${DOCKER_IMAGE_FULL}:${params.DEPLOY_ENV}
+              docker push ${DOCKER_IMAGE_FULL}:${env.DOCKER_TAG}
+              docker logout
+            """
+          }
         }
       }
     }
