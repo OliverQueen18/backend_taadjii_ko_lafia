@@ -1,0 +1,92 @@
+#!groovy
+pipeline {
+  agent any
+
+  environment {
+    // 🔐 Identifiant Jenkins pour Docker Hub (Stocké dans Credentials)
+    DOCKERHUB_CREDENTIALS = credentials('github-token')
+
+    // 🏷️ Nom et tag de l’image
+    IMAGE_NAME = "OliverQueen18/backend_taadjii_ko_lafia.git"
+    IMAGE_TAG = "main"
+
+    // 📁 Dossier temporaire de build
+    BUILD_DIR = "."
+
+    // ⏱️ Permet d’ajouter un timestamp dans le tag (optionnel)
+    BUILD_TIMESTAMP = new Date().format("yyyyMMdd-HHmmss", TimeZone.getTimeZone("UTC"))
+  }
+
+  options {
+    // ⏳ Limite la durée maximale du build à 30 minutes
+    timeout(time: 30, unit: 'MINUTES')
+
+    // 💬 Affiche le timestamp sur chaque ligne des logs
+    timestamps()
+
+    // 📦 Ne garde que les 10 derniers builds
+    buildDiscarder(logRotator(numToKeepStr: '10'))
+  }
+
+  stages {
+
+    stage('Checkout Code') {
+      steps {
+        echo "📦 Récupération du code source depuis le dépôt Git..."
+        checkout scm
+      }
+    }
+
+    stage('Docker Build') {
+      steps {
+        script {
+          echo "🏗️ Construction de l’image Docker : ${IMAGE_NAME}:${IMAGE_TAG}"
+          sh """
+            docker build \
+              -t ${IMAGE_NAME}:${IMAGE_TAG} \
+              -t ${IMAGE_NAME}:${IMAGE_TAG}-${BUILD_TIMESTAMP} \
+              ${BUILD_DIR}
+          """
+        }
+      }
+    }
+
+    stage('Docker Login') {
+      steps {
+        echo "🔐 Connexion à Docker Hub..."
+        sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+      }
+    }
+
+    stage('Docker Push') {
+      steps {
+        script {
+          echo "🚀 Envoi de l’image vers Docker Hub..."
+          sh """
+            docker push ${IMAGE_NAME}:${IMAGE_TAG}
+            docker push ${IMAGE_NAME}:${IMAGE_TAG}-${BUILD_TIMESTAMP}
+          """
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      echo "🧹 Nettoyage local après build..."
+      sh 'docker logout'
+      sh """
+        docker image rm ${IMAGE_NAME}:${IMAGE_TAG} || true
+        docker image rm ${IMAGE_NAME}:${IMAGE_TAG}-${BUILD_TIMESTAMP} || true
+      """
+    }
+
+    success {
+      echo "✅ Build et push réussis pour ${IMAGE_NAME}:${IMAGE_TAG}"
+    }
+
+    failure {
+      echo "❌ Le pipeline a échoué."
+    }
+  }
+}
