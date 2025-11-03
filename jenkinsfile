@@ -2,91 +2,110 @@
 pipeline {
   agent any
 
-  environment {
-    // 🔐 Identifiant Jenkins pour Docker Hub (Stocké dans Credentials)
-    DOCKERHUB_CREDENTIALS = credentials('github-token')
-
-    // 🏷️ Nom et tag de l’image
-    IMAGE_NAME = "OliverQueen18/backend_taadjii_ko_lafia.git"
-    IMAGE_TAG = "main"
-
-    // 📁 Dossier temporaire de build
-    BUILD_DIR = "."
-
-    // ⏱️ Permet d’ajouter un timestamp dans le tag (optionnel)
-    BUILD_TIMESTAMP = new Date().format("yyyyMMdd-HHmmss", TimeZone.getTimeZone("UTC"))
+  parameters {
+    booleanParam(
+      name: 'FORCE_MAVEN_CLEAN',
+      defaultValue: false,
+      description: 'Forcer le nettoyage complet du cache Maven avant le build'
+    )
   }
 
-  options {
-    // ⏳ Limite la durée maximale du build à 30 minutes
-    timeout(time: 30, unit: 'MINUTES')
-
-    // 💬 Affiche le timestamp sur chaque ligne des logs
-    timestamps()
-
-    // 📦 Ne garde que les 10 derniers builds
-    buildDiscarder(logRotator(numToKeepStr: '10'))
+  environment {
+    DOCKERHUB_CREDENTIALS = credentials('github-token')
+    MAVEN_CACHE = "${HOME}/.m2"
+    JAVA_HOME = '/opt/java/openjdk'  // Java 17 dans l'image Maven
+    PATH = "${JAVA_HOME}/bin:${env.PATH}"
   }
 
   stages {
 
-    stage('Checkout Code') {
+    stage('Java Setup Verification') {
+      agent {
+        docker {
+          image 'maven:3.9.6-eclipse-temurin-17'
+          args "-u root -v ${MAVEN_CACHE}:/root/.m2"
+        }
+      }
       steps {
-        echo "📦 Récupération du code source depuis le dépôt Git..."
-        checkout scm
+        script {
+          echo "🔍 === Vérification de la Configuration Java ==="
+          sh '''
+            echo "JAVA_HOME: $JAVA_HOME"
+            echo "PATH: $PATH"
+            echo ""
+            echo "=== Version Java ==="
+            java -version
+            echo ""
+            echo "=== Version Maven ==="
+            mvn --version
+            echo ""
+            echo "=== Vérification des Variables d'Environnement ==="
+            echo "JAVA_HOME: $JAVA_HOME"
+            echo "MAVEN_OPTS: $MAVEN_OPTS"
+          '''
+        }
+      }
+    }
+
+    stage('Maven Install') {
+      agent {
+        docker {
+          image 'maven:3.9.6-eclipse-temurin-17'
+          args "-u root -v ${MAVEN_CACHE}:/root/.m2"
+        }
+      }
+      steps {
+        script {
+          echo "🔍 Vérification du paramètre FORCE_MAVEN_CLEAN : ${params.FORCE_MAVEN_CLEAN}"
+          if (params.FORCE_MAVEN_CLEAN) {
+            echo "🧹 Nettoyage complet du cache Maven..."
+            sh 'rm -rf /root/.m2/repository'
+          } else {
+            echo "✅ Utilisation du cache Maven existant."
+          }
+          
+          echo "🔍 === Vérification Finale Java ==="
+          sh '''
+            echo "Java version utilisée pour la compilation:"
+            java -version
+            echo ""
+            echo "Maven version:"
+            mvn --version
+            echo ""
+            echo "Variables d'environnement:"
+            echo "JAVA_HOME: $JAVA_HOME"
+            echo "MAVEN_OPTS: $MAVEN_OPTS"
+          '''
+          
+          echo "🚀 Exécution du build Maven (avec forçage des snapshots -U)"
+          sh 'mvn clean install -U -DskipTests'
+        }
       }
     }
 
     stage('Docker Build') {
+      agent any
       steps {
-        script {
-          echo "🏗️ Construction de l’image Docker : ${IMAGE_NAME}:${IMAGE_TAG}"
-          sh """
-            docker build \
-              -t ${IMAGE_NAME}:${IMAGE_TAG} \
-              -t ${IMAGE_NAME}:${IMAGE_TAG}-${BUILD_TIMESTAMP} \
-              ${BUILD_DIR}
-          """
-        }
+        sh 'docker build -t cookingbenlee/api-cooking-ben:mod-partage-recettes .'
       }
     }
 
-    stage('Docker Login') {
+    stage('Login') {
       steps {
-        echo "🔐 Connexion à Docker Hub..."
         sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
       }
     }
 
-    stage('Docker Push') {
+    stage('Push') {
       steps {
-        script {
-          echo "🚀 Envoi de l’image vers Docker Hub..."
-          sh """
-            docker push ${IMAGE_NAME}:${IMAGE_TAG}
-            docker push ${IMAGE_NAME}:${IMAGE_TAG}-${BUILD_TIMESTAMP}
-          """
-        }
+        sh 'docker push OliverQueen18/backend_taadjii_ko_lafia'
       }
     }
   }
 
   post {
     always {
-      echo "🧹 Nettoyage local après build..."
       sh 'docker logout'
-      sh """
-        docker image rm ${IMAGE_NAME}:${IMAGE_TAG} || true
-        docker image rm ${IMAGE_NAME}:${IMAGE_TAG}-${BUILD_TIMESTAMP} || true
-      """
-    }
-
-    success {
-      echo "✅ Build et push réussis pour ${IMAGE_NAME}:${IMAGE_TAG}"
-    }
-
-    failure {
-      echo "❌ Le pipeline a échoué."
     }
   }
 }
