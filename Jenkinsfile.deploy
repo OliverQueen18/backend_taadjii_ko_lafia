@@ -28,7 +28,7 @@ pipeline {
     
     // Docker Hub
     DOCKER_REGISTRY = 'docker.io'
-    DOCKER_USERNAME = 'OliverQueen18'
+    DOCKER_USERNAME = 'oliverqueen18'  // Docker Hub usernames are case-insensitive, use lowercase
     DOCKER_IMAGE_NAME = 'backend_taadjii_ko_lafia'
     DOCKER_IMAGE_FULL = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
     
@@ -84,12 +84,14 @@ pipeline {
       steps {
         echo "🐳 Construction de l'image Docker backend..."
         script {
+          // Utiliser le nom d'utilisateur en minuscules pour cohérence avec Docker Hub
+          def imageName = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
           sh """
             docker build \
-              --tag ${DOCKER_IMAGE_FULL}:${env.GIT_COMMIT_SHORT} \
-              --tag ${DOCKER_IMAGE_FULL}:latest \
-              --tag ${DOCKER_IMAGE_FULL}:${params.DEPLOY_ENV} \
-              --tag ${DOCKER_IMAGE_FULL}:${env.DOCKER_TAG} \
+              --tag ${imageName}:${env.GIT_COMMIT_SHORT} \
+              --tag ${imageName}:latest \
+              --tag ${imageName}:${params.DEPLOY_ENV} \
+              --tag ${imageName}:${env.DOCKER_TAG} \
               .
           """
         }
@@ -108,12 +110,14 @@ pipeline {
           passwordVariable: 'DOCKER_PASS'
         )]) {
           script {
+            // Utiliser le nom d'utilisateur en minuscules pour cohérence
+            def imageName = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
             sh """
               echo "\$DOCKER_PASS" | docker login docker.io -u "\$DOCKER_USER" --password-stdin
-              docker push ${DOCKER_IMAGE_FULL}:${env.GIT_COMMIT_SHORT}
-              docker push ${DOCKER_IMAGE_FULL}:latest
-              docker push ${DOCKER_IMAGE_FULL}:${params.DEPLOY_ENV}
-              docker push ${DOCKER_IMAGE_FULL}:${env.DOCKER_TAG}
+              docker push ${imageName}:${env.GIT_COMMIT_SHORT}
+              docker push ${imageName}:latest
+              docker push ${imageName}:${params.DEPLOY_ENV}
+              docker push ${imageName}:${env.DOCKER_TAG}
               docker logout
             """
           }
@@ -127,12 +131,13 @@ pipeline {
         sshagent(['ssh-server-credentials']) {
           script {
             // Mettre à jour l'image dans le docker-compose.yml existant
+            def imageName = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
             sh """
               ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
                 "cd ${REMOTE_DIR} && \
-                 sed -i 's|image:.*backend_taadjii_ko_lafia.*|image: ${DOCKER_IMAGE_FULL}:latest|g' docker-compose.yml && \
+                 sed -i 's|image:.*backend_taadjii_ko_lafia.*|image: ${imageName}:latest|g' docker-compose.yml && \
                  sed -i '/backend:/,/^[[:space:]]*[a-z]/ { /build:/d; /context:/d; /dockerfile:/d; }' docker-compose.yml && \
-                 sed -i '/backend:/a\\    image: ${DOCKER_IMAGE_FULL}:latest' docker-compose.yml"
+                 sed -i '/backend:/a\\    image: ${imageName}:latest' docker-compose.yml"
             """
           }
         }
@@ -146,9 +151,10 @@ pipeline {
           script {
             // Pull l'image sur le serveur
             if (params.PUSH_TO_REGISTRY == true) {
+              def imageName = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
               sh """
                 ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
-                  "cd ${REMOTE_DIR} && docker pull ${DOCKER_IMAGE_FULL}:latest || true"
+                  "cd ${REMOTE_DIR} && docker pull ${imageName}:latest || true"
               """
             }
             
@@ -198,7 +204,7 @@ pipeline {
         Environnement: ${params.DEPLOY_ENV}
         Git Commit: ${env.GIT_COMMIT_SHORT}
         Build Timestamp: ${env.BUILD_TIMESTAMP}
-        Docker Image: ${DOCKER_IMAGE_FULL}:latest
+        Docker Image: ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:latest
         
         URL d'accès:
         - Backend API: http://${REMOTE_HOST}:8000/api
