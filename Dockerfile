@@ -3,20 +3,18 @@ FROM maven:3.9.6-eclipse-temurin-17 AS builder
 
 WORKDIR /app
 
-# Copy Maven files first for better caching
+# Copy pom.xml first for better caching
 COPY pom.xml .
-COPY .mvn .mvn
-COPY mvnw .
-COPY mvnw.cmd .
 
 # Download dependencies (this layer will be cached if pom.xml doesn't change)
-RUN ./mvnw dependency:go-offline -B || true
+# Use mvn directly since Maven is pre-installed in the maven:3.9.6-eclipse-temurin-17 image
+RUN mvn dependency:go-offline -B || true
 
 # Copy source code
 COPY src src
 
-# Build the application
-RUN ./mvnw clean package -DskipTests -B
+# Build the application using mvn directly (Maven is already in the base image)
+RUN mvn clean package -DskipTests -B
 
 # Runtime stage
 FROM eclipse-temurin:17-jre-alpine
