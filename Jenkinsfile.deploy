@@ -66,11 +66,14 @@ pipeline {
       steps {
         echo "🔨 Compilation Maven..."
         script {
-          // Utiliser le wrapper Maven (./mvnw sur Linux, mvnw.cmd sur Windows)
-          // Jenkins tourne généralement sur Linux, donc on utilise ./mvnw
-          def mvnCmd = params.SKIP_TESTS ? './mvnw clean package -DskipTests' : './mvnw clean package'
+          // Vérifier si le wrapper Maven existe, sinon utiliser mvn directement
+          def mvnWrapper = sh(script: 'test -f ./mvnw && echo "./mvnw" || echo "mvn"', returnStdout: true).trim()
+          def mvnCmd = params.SKIP_TESTS ? "${mvnWrapper} clean package -DskipTests" : "${mvnWrapper} clean package"
+          
           sh """
-            chmod +x ./mvnw || true
+            if [ -f ./mvnw ]; then
+              chmod +x ./mvnw
+            fi
             ${mvnCmd}
           """
         }
