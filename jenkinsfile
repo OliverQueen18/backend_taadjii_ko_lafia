@@ -8,16 +8,46 @@ pipeline {
       defaultValue: false,
       description: 'Forcer le nettoyage complet du cache Maven avant le build'
     )
+    choice(
+      name: 'DEPLOY_ENV',
+      choices: ['dev', 'staging', 'production'],
+      description: 'Environnement de déploiement'
+    )
+    string(
+      name: 'DOCKER_IMAGE_TAG',
+      defaultValue: 'latest',
+      description: 'Tag pour l\'image Docker (par défaut: latest, ou utilisez un numéro de version)'
+    )
   }
 
   environment {
-    DOCKERHUB_CREDENTIALS = credentials('github-token')
+    DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+    DOCKER_REGISTRY = 'docker.io'
+    DOCKER_USERNAME = 'OliverQueen18'
+    DOCKER_IMAGE_NAME = 'backend_taadjii_ko_lafia'
+    DOCKER_IMAGE_FULL = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
     MAVEN_CACHE = "${HOME}/.m2"
-    JAVA_HOME = '/opt/java/openjdk'  // Java 17 dans l'image Maven
+    JAVA_HOME = '/opt/java/openjdk'
     PATH = "${JAVA_HOME}/bin:${env.PATH}"
   }
 
   stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+        script {
+          env.GIT_COMMIT_SHORT = sh(
+            script: 'git rev-parse --short HEAD',
+            returnStdout: true
+          ).trim()
+          env.BUILD_TIMESTAMP = sh(
+            script: 'date +%Y%m%d-%H%M%S',
+            returnStdout: true
+          ).trim()
+          env.DOCKER_TAG = "${params.DOCKER_IMAGE_TAG == 'latest' ? 'latest' : params.DOCKER_IMAGE_TAG}-${env.GIT_COMMIT_SHORT}"
+        }
+      }
+    }
 
     stage('Java Setup Verification') {
       agent {
@@ -39,15 +69,16 @@ pipeline {
             echo "=== Version Maven ==="
             mvn --version
             echo ""
-            echo "=== Vérification des Variables d'Environnement ==="
-            echo "JAVA_HOME: $JAVA_HOME"
-            echo "MAVEN_OPTS: $MAVEN_OPTS"
+            echo "=== Informations de Build ==="
+            echo "Git Commit: ${GIT_COMMIT_SHORT}"
+            echo "Build Timestamp: ${BUILD_TIMESTAMP}"
+            echo "Docker Tag: ${DOCKER_TAG}"
           '''
         }
       }
     }
 
-    stage('Maven Install') {
+    stage('Maven Build') {
       agent {
         docker {
           image 'maven:3.9.6-eclipse-temurin-17'
@@ -71,41 +102,134 @@ pipeline {
             echo ""
             echo "Maven version:"
             mvn --version
-            echo ""
-            echo "Variables d'environnement:"
-            echo "JAVA_HOME: $JAVA_HOME"
-            echo "MAVEN_OPTS: $MAVEN_OPTS"
           '''
           
-          echo "🚀 Exécution du build Maven (avec forçage des snapshots -U)"
-          sh 'mvn clean install -U -DskipTests'
+          echo "🚀 Exécution du build Maven"
+          sh 'mvn clean package -U -DskipTests'
+          
+          echo "✅ Build Maven réussi"
+          archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
         }
       }
     }
 
     stage('Docker Build') {
-      agent any
       steps {
-        sh 'docker build -t cookingbenlee/api-cooking-ben:mod-partage-recettes .'
+        script {
+          echo "🐳 === Construction de l'image Docker ==="
+          echo "Image: ${DOCKER_IMAGE_FULL}"
+          echo "Tag: ${DOCKER_TAG}"
+          
+          sh """
+            docker build \
+              --tag ${DOCKER_IMAGE_FULL}:${DOCKER_TAG} \
+              --tag ${DOCKER_IMAGE_FULL}:latest \
+              --build-arg BUILD_DATE="${BUILD_TIMESTAMP}" \
+              --build-arg VCS_REF="${GIT_COMMIT_SHORT}" \
+              --build-arg VERSION="${DOCKER_TAG}" \
+              .
+          """
+          
+          echo "✅ Image Docker construite avec succès"
+        }
       }
     }
 
-    stage('Login') {
+    stage('Docker Test') {
       steps {
-        sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+        script {
+          echo "🧪 === Test de l'image Docker ==="
+          sh """
+            docker images | grep ${DOCKER_IMAGE_NAME}
+            docker inspect ${DOCKER_IMAGE_FULL}:${DOCKER_TAG}
+          """
+        }
       }
     }
 
-    stage('Push') {
+    stage('Docker Login') {
       steps {
-        sh 'docker push OliverQueen18/backend_taadjii_ko_lafia'
+        script {
+          echo "🔐 === Connexion à Docker Hub ==="
+          withCredentials([usernamePassword(
+            credentialsId: 'dockerhub-credentials',
+            usernameVariable: 'DOCKER_USER',
+            passwordVariable: 'DOCKER_PASS'
+          )]) {
+            sh """
+              echo ${DOCKER_PASS} | docker login ${DOCKER_REGISTRY} -u ${DOCKER_USER} --password-stdin
+            """
+          }
+        }
+      }
+    }
+
+    stage('Docker Push') {
+      when {
+        anyOf {
+          branch 'main'
+          branch 'master'
+          expression { params.DEPLOY_ENV == 'production' }
+        }
+      }
+      steps {
+        script {
+          echo "📤 === Push de l'image Docker ==="
+          echo "Environnement: ${params.DEPLOY_ENV}"
+          echo "Tag: ${DOCKER_TAG}"
+          
+          sh """
+            docker push ${DOCKER_IMAGE_FULL}:${DOCKER_TAG}
+            docker push ${DOCKER_IMAGE_FULL}:latest
+          """
+          
+          echo "✅ Image Docker pushée avec succès"
+        }
+      }
+    }
+
+    stage('Deploy Notification') {
+      when {
+        anyOf {
+          branch 'main'
+          branch 'master'
+        }
+      }
+      steps {
+        script {
+          echo "📢 === Notification de déploiement ==="
+          echo """
+            ✅ Déploiement réussi !
+            
+            Environnement: ${params.DEPLOY_ENV}
+            Image Docker: ${DOCKER_IMAGE_FULL}:${DOCKER_TAG}
+            Git Commit: ${env.GIT_COMMIT_SHORT}
+            Build Timestamp: ${env.BUILD_TIMESTAMP}
+            
+            Pour déployer:
+            docker pull ${DOCKER_IMAGE_FULL}:${DOCKER_TAG}
+            docker-compose up -d
+          """
+        }
       }
     }
   }
 
   post {
     always {
-      sh 'docker logout'
+      script {
+        echo "🧹 === Nettoyage ==="
+        sh 'docker logout || true'
+        // Nettoyer les images Docker orphelines (optionnel)
+        sh 'docker image prune -f || true'
+      }
+    }
+    success {
+      echo "✅ Pipeline terminé avec succès"
+    }
+    failure {
+      echo "❌ Pipeline échoué"
+      // Vous pouvez ajouter des notifications ici (email, Slack, etc.)
     }
   }
 }

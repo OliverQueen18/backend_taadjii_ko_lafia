@@ -1,0 +1,205 @@
+#!groovy
+pipeline {
+  agent any
+
+  parameters {
+    choice(
+      name: 'DEPLOY_ENV',
+      choices: ['dev', 'prod'],
+      description: 'Environnement de déploiement',
+      defaultValue: 'prod'
+    )
+    booleanParam(
+      name: 'PUSH_TO_REGISTRY',
+      defaultValue: true,
+      description: 'Pousser l\'image vers Docker Hub'
+    )
+    booleanParam(
+      name: 'SKIP_TESTS',
+      defaultValue: false,
+      description: 'Ignorer les tests Maven'
+    )
+  }
+
+  environment {
+    // Configuration du serveur distant
+    REMOTE_HOST = '180.149.197.244'
+    REMOTE_USER = 'adminubuntu'
+    REMOTE_DIR = '/home/adminubuntu/taadjii-ko-lafia'
+    
+    // Docker Hub
+    DOCKER_REGISTRY = 'docker.io'
+    DOCKER_USERNAME = 'OliverQueen18'
+    DOCKER_IMAGE_NAME = 'backend_taadjii_ko_lafia'
+    DOCKER_IMAGE_FULL = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
+    
+    // Credentials
+    DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
+    SSH_CREDENTIALS = credentials('ssh-server-credentials')
+  }
+
+  options {
+    timeout(time: 60, unit: 'MINUTES')
+    timestamps()
+    buildDiscarder(logRotator(numToKeepStr: '10'))
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        echo "📦 Récupération du code source backend..."
+        checkout scm
+        script {
+          env.GIT_COMMIT_SHORT = sh(
+            script: 'git rev-parse --short HEAD',
+            returnStdout: true
+          ).trim()
+          env.BUILD_TIMESTAMP = sh(
+            script: 'date +%Y%m%d-%H%M%S',
+            returnStdout: true
+          ).trim()
+          env.DOCKER_TAG = "${env.GIT_COMMIT_SHORT}-${env.BUILD_TIMESTAMP}"
+        }
+      }
+    }
+
+    stage('Build Maven') {
+      steps {
+        echo "🔨 Compilation Maven..."
+        script {
+          def mvnCmd = params.SKIP_TESTS ? 'mvn clean package -DskipTests' : 'mvn clean package'
+          sh """
+            ${mvnCmd}
+          """
+        }
+      }
+    }
+
+    stage('Build Docker Image') {
+      steps {
+        echo "🐳 Construction de l'image Docker backend..."
+        script {
+          sh """
+            docker build \
+              --tag ${DOCKER_IMAGE_FULL}:${env.GIT_COMMIT_SHORT} \
+              --tag ${DOCKER_IMAGE_FULL}:latest \
+              --tag ${DOCKER_IMAGE_FULL}:${params.DEPLOY_ENV} \
+              --tag ${DOCKER_IMAGE_FULL}:${env.DOCKER_TAG} \
+              .
+          """
+        }
+      }
+    }
+
+    stage('Push to Docker Hub') {
+      when {
+        expression { params.PUSH_TO_REGISTRY == true }
+      }
+      steps {
+        echo "📤 Envoi de l'image vers Docker Hub..."
+        withCredentials([usernamePassword(
+          credentialsId: 'dockerhub-credentials',
+          usernameVariable: 'DOCKER_USER',
+          passwordVariable: 'DOCKER_PASS'
+        )]) {
+          sh """
+            echo ${DOCKER_PASS} | docker login ${DOCKER_REGISTRY} -u ${DOCKER_USER} --password-stdin
+            docker push ${DOCKER_IMAGE_FULL}:${env.GIT_COMMIT_SHORT}
+            docker push ${DOCKER_IMAGE_FULL}:latest
+            docker push ${DOCKER_IMAGE_FULL}:${params.DEPLOY_ENV}
+            docker push ${DOCKER_IMAGE_FULL}:${env.DOCKER_TAG}
+            docker logout
+          """
+        }
+      }
+    }
+
+    stage('Update Docker Compose on Server') {
+      steps {
+        echo "📝 Mise à jour du docker-compose.yml sur le serveur..."
+        sshagent(['ssh-server-credentials']) {
+          script {
+            // Mettre à jour l'image dans le docker-compose.yml existant
+            sh """
+              ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
+                "cd ${REMOTE_DIR} && \
+                 sed -i 's|image:.*backend_taadjii_ko_lafia.*|image: ${DOCKER_IMAGE_FULL}:latest|g' docker-compose.yml && \
+                 sed -i '/backend:/,/^[[:space:]]*[a-z]/ { /build:/d; /context:/d; /dockerfile:/d; }' docker-compose.yml && \
+                 sed -i '/backend:/a\\    image: ${DOCKER_IMAGE_FULL}:latest' docker-compose.yml"
+            """
+          }
+        }
+      }
+    }
+
+    stage('Deploy to Server') {
+      steps {
+        echo "🚀 Déploiement du backend sur le serveur..."
+        sshagent(['ssh-server-credentials']) {
+          script {
+            // Pull l'image sur le serveur
+            if (params.PUSH_TO_REGISTRY == true) {
+              sh """
+                ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
+                  "cd ${REMOTE_DIR} && docker pull ${DOCKER_IMAGE_FULL}:latest || true"
+              """
+            }
+            
+            // Redémarrer seulement le service backend avec la nouvelle image
+            sh """
+              ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
+                "cd ${REMOTE_DIR} && \
+                 docker-compose -f docker-compose.yml pull backend && \
+                 docker-compose -f docker-compose.yml up -d --no-deps backend"
+            """
+          }
+        }
+      }
+    }
+
+    stage('Health Check') {
+      steps {
+        echo "🏥 Vérification de la santé du backend..."
+        sshagent(['ssh-server-credentials']) {
+          script {
+            sleep(time: 20, unit: 'SECONDS')
+            
+            sh """
+              ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
+                "cd ${REMOTE_DIR} && docker-compose ps backend"
+            """
+            
+            sh """
+              ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
+                "cd ${REMOTE_DIR} && docker-compose logs --tail=30 backend"
+            """
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      echo "🧹 Nettoyage..."
+      sh 'docker logout || true'
+    }
+    success {
+      echo """
+        ✅ Déploiement backend réussi !
+        
+        Environnement: ${params.DEPLOY_ENV}
+        Git Commit: ${env.GIT_COMMIT_SHORT}
+        Build Timestamp: ${env.BUILD_TIMESTAMP}
+        Docker Image: ${DOCKER_IMAGE_FULL}:latest
+        
+        URL d'accès:
+        - Backend API: http://${REMOTE_HOST}:8000/api
+      """
+    }
+    failure {
+      echo "❌ Le déploiement backend a échoué. Consultez les logs ci-dessus."
+    }
+  }
+}
+
