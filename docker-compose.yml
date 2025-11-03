@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: fuel-ticket-postgres
+    environment:
+      POSTGRES_DB: fuelticketdb
+      POSTGRES_USER: fuelticket
+      POSTGRES_PASSWORD: changeit
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fuel-ticket-network
+
+  app:
+    build: .
+    container_name: fuel-ticket-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/fuelticketdb
+      SPRING_DATASOURCE_USERNAME: fuelticket
+      SPRING_DATASOURCE_PASSWORD: changeit
+      JWT_SECRET: mySecretKey
+      JWT_EXPIRATION: 86400000
+    depends_on:
+      - postgres
+    networks:
+      - fuel-ticket-network
+
+volumes:
+  postgres_data:
+
+networks:
+  fuel-ticket-network:
+    driver: bridge
