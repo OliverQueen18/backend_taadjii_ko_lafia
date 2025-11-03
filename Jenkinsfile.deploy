@@ -128,12 +128,17 @@ pipeline {
     stage('Update Docker Compose on Server') {
       steps {
         echo "📝 Mise à jour du docker-compose.yml sur le serveur..."
-        sshagent(['ssh-server-credentials']) {
+        withCredentials([sshUserPrivateKey(
+          credentialsId: 'ssh-server-credentials',
+          keyFileVariable: 'SSH_KEY',
+          usernameVariable: 'SSH_USER'
+        )]) {
           script {
             // Mettre à jour l'image dans le docker-compose.yml existant
             def imageName = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
             sh """
-              ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
+              chmod 600 \$SSH_KEY || true
+              ssh -i \$SSH_KEY -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
                 "cd ${REMOTE_DIR} && \
                  sed -i 's|image:.*backend_taadjii_ko_lafia.*|image: ${imageName}:latest|g' docker-compose.yml && \
                  sed -i '/backend:/,/^[[:space:]]*[a-z]/ { /build:/d; /context:/d; /dockerfile:/d; }' docker-compose.yml && \
@@ -147,20 +152,26 @@ pipeline {
     stage('Deploy to Server') {
       steps {
         echo "🚀 Déploiement du backend sur le serveur..."
-        sshagent(['ssh-server-credentials']) {
+        withCredentials([sshUserPrivateKey(
+          credentialsId: 'ssh-server-credentials',
+          keyFileVariable: 'SSH_KEY',
+          usernameVariable: 'SSH_USER'
+        )]) {
           script {
             // Pull l'image sur le serveur
             if (params.PUSH_TO_REGISTRY == true) {
               def imageName = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
               sh """
-                ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
+                chmod 600 \$SSH_KEY || true
+                ssh -i \$SSH_KEY -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
                   "cd ${REMOTE_DIR} && docker pull ${imageName}:latest || true"
               """
             }
             
             // Redémarrer seulement le service backend avec la nouvelle image
             sh """
-              ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
+              chmod 600 \$SSH_KEY || true
+              ssh -i \$SSH_KEY -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
                 "cd ${REMOTE_DIR} && \
                  docker-compose -f docker-compose.yml pull backend && \
                  docker-compose -f docker-compose.yml up -d --no-deps backend"
@@ -173,17 +184,23 @@ pipeline {
     stage('Health Check') {
       steps {
         echo "🏥 Vérification de la santé du backend..."
-        sshagent(['ssh-server-credentials']) {
+        withCredentials([sshUserPrivateKey(
+          credentialsId: 'ssh-server-credentials',
+          keyFileVariable: 'SSH_KEY',
+          usernameVariable: 'SSH_USER'
+        )]) {
           script {
             sleep(time: 20, unit: 'SECONDS')
             
             sh """
-              ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
+              chmod 600 \$SSH_KEY || true
+              ssh -i \$SSH_KEY -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
                 "cd ${REMOTE_DIR} && docker-compose ps backend"
             """
             
             sh """
-              ssh -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
+              chmod 600 \$SSH_KEY || true
+              ssh -i \$SSH_KEY -o StrictHostKeyChecking=no ${REMOTE_USER}@${REMOTE_HOST} \
                 "cd ${REMOTE_DIR} && docker-compose logs --tail=30 backend"
             """
           }
