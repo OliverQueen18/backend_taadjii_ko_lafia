@@ -5,9 +5,8 @@ pipeline {
   parameters {
     choice(
       name: 'DEPLOY_ENV',
-      choices: ['dev', 'prod'],
-      description: 'Environnement de déploiement',
-      // defaultValue: 'prod'
+      choices: ['prod', 'dev'],  // 'prod' est la première valeur = valeur par défaut
+      description: 'Environnement de déploiement'
     )
     booleanParam(
       name: 'PUSH_TO_REGISTRY',
