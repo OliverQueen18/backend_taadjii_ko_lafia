@@ -22,8 +22,10 @@ public class CorsConfig implements WebMvcConfigurer {
                     "http://localhost:80",
                     "http://180.149.197.244",
                     "http://180.149.197.244:80",
+                    "http://180.149.197.244:8000",
                     "https://taadjiikolafia.org",
-                    "https://www.taadjiikolafia.org"
+                    "https://www.taadjiikolafia.org",
+                    "https://api.taadjiikolafia.org"
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH")
                 .allowedHeaders("*")
@@ -40,8 +42,10 @@ public class CorsConfig implements WebMvcConfigurer {
             "http://localhost:80",
             "http://180.149.197.244",
             "http://180.149.197.244:80",
+            "http://180.149.197.244:8000",
             "https://taadjiikolafia.org",
-            "https://www.taadjiikolafia.org"
+            "https://www.taadjiikolafia.org",
+            "https://api.taadjiikolafia.org"
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         // Explicitly allow Authorization header
