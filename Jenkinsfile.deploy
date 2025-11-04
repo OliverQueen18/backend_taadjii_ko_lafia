@@ -21,11 +21,6 @@ pipeline {
   }
 
   environment {
-    // Configuration du serveur distant
-    REMOTE_HOST = '180.149.197.244'
-    REMOTE_USER = 'adminubuntu'
-    REMOTE_DIR = '/home/adminubuntu/taadjii-ko-lafia'
-    
     // Docker Hub
     DOCKER_REGISTRY = 'docker.io'
     DOCKER_USERNAME = 'oliverqueen18'  // Docker Hub usernames are case-insensitive, use lowercase
@@ -34,7 +29,6 @@ pipeline {
     
     // Credentials
     DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-    SSH_CREDENTIALS = credentials('ssh-server-credentials')
   }
 
   options {
@@ -125,142 +119,6 @@ pipeline {
       }
     }
 
-    stage('Update Docker Compose on Server') {
-      steps {
-        echo "📝 Mise à jour du docker-compose.yml sur le serveur..."
-        withCredentials([sshUserPrivateKey(
-          credentialsId: 'ssh-server-credentials',
-          keyFileVariable: 'SSH_KEY',
-          usernameVariable: 'SSH_USER',
-          passphraseVariable: 'SSH_PASSPHRASE'
-        )]) {
-          script {
-            // Vérifier et corriger les permissions de la clé SSH
-            sh """
-              # Vérifier que la clé existe
-              if [ ! -f "\$SSH_KEY" ]; then
-                echo "❌ Erreur: La clé SSH n'existe pas à \$SSH_KEY"
-                exit 1
-              fi
-              
-              # Corriger les permissions
-              chmod 600 "\$SSH_KEY"
-              
-              # Vérifier le format de la clé
-              if ! ssh-keygen -l -f "\$SSH_KEY" > /dev/null 2>&1; then
-                echo "⚠️  Avertissement: Impossible de vérifier le format de la clé, mais on continue..."
-              fi
-            """
-            
-            // Mettre à jour l'image dans le docker-compose.yml existant
-            def imageName = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
-            sh """
-              ssh -i "\$SSH_KEY" \
-                -o StrictHostKeyChecking=no \
-                -o UserKnownHostsFile=/dev/null \
-                -o IdentitiesOnly=yes \
-                ${REMOTE_USER}@${REMOTE_HOST} \
-                "mkdir -p ${REMOTE_DIR} && \
-                 cd ${REMOTE_DIR} && \
-                 if [ ! -f docker-compose.yml ]; then \
-                   echo '❌ Erreur: docker-compose.yml n existe pas dans ${REMOTE_DIR}'; \
-                   exit 1; \
-                 fi && \
-                 TMP_FILE=\$(mktemp) && \
-                 sed 's|image:.*backend_taadjii_ko_lafia.*|image: ${imageName}:latest|g' docker-compose.yml > \$TMP_FILE && \
-                 sed '/backend:/,/^[[:space:]]*[a-z]/ { /build:/d; /context:/d; /dockerfile:/d; }' \$TMP_FILE > \${TMP_FILE}.2 && \
-                 sed '/^[[:space:]]*backend:/a\\    image: ${imageName}:latest' \${TMP_FILE}.2 > \$TMP_FILE && \
-                 mv \$TMP_FILE docker-compose.yml && \
-                 rm -f \${TMP_FILE}.2 && \
-                 echo '✅ docker-compose.yml mis à jour avec succès'"
-            """
-          }
-        }
-      }
-    }
-
-    stage('Deploy to Server') {
-      steps {
-        echo "🚀 Déploiement du backend sur le serveur..."
-        withCredentials([sshUserPrivateKey(
-          credentialsId: 'ssh-server-credentials',
-          keyFileVariable: 'SSH_KEY',
-          usernameVariable: 'SSH_USER',
-          passphraseVariable: 'SSH_PASSPHRASE'
-        )]) {
-          script {
-            // Vérifier les permissions de la clé SSH
-            sh """
-              chmod 600 "\$SSH_KEY"
-            """
-            
-            // Pull l'image sur le serveur
-            if (params.PUSH_TO_REGISTRY == true) {
-              def imageName = "${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}"
-              sh """
-                ssh -i "\$SSH_KEY" \
-                  -o StrictHostKeyChecking=no \
-                  -o UserKnownHostsFile=/dev/null \
-                  -o IdentitiesOnly=yes \
-                  ${REMOTE_USER}@${REMOTE_HOST} \
-                  "cd ${REMOTE_DIR} && docker pull ${imageName}:latest || true"
-              """
-            }
-            
-            // Redémarrer seulement le service backend avec la nouvelle image
-            sh """
-              ssh -i "\$SSH_KEY" \
-                -o StrictHostKeyChecking=no \
-                -o UserKnownHostsFile=/dev/null \
-                -o IdentitiesOnly=yes \
-                ${REMOTE_USER}@${REMOTE_HOST} \
-                "cd ${REMOTE_DIR} && \
-                 if [ ! -f docker-compose.yml ]; then \
-                   echo '❌ Erreur: docker-compose.yml n existe pas'; \
-                   exit 1; \
-                 fi && \
-                 docker-compose -f docker-compose.yml pull backend && \
-                 docker-compose -f docker-compose.yml up -d --no-deps backend"
-            """
-          }
-        }
-      }
-    }
-
-    stage('Health Check') {
-      steps {
-        echo "🏥 Vérification de la santé du backend..."
-        withCredentials([sshUserPrivateKey(
-          credentialsId: 'ssh-server-credentials',
-          keyFileVariable: 'SSH_KEY',
-          usernameVariable: 'SSH_USER',
-          passphraseVariable: 'SSH_PASSPHRASE'
-        )]) {
-          script {
-            sleep(time: 20, unit: 'SECONDS')
-            
-            sh """
-              chmod 600 "\$SSH_KEY"
-              ssh -i "\$SSH_KEY" \
-                -o StrictHostKeyChecking=no \
-                -o UserKnownHostsFile=/dev/null \
-                -o IdentitiesOnly=yes \
-                ${REMOTE_USER}@${REMOTE_HOST} \
-                "cd ${REMOTE_DIR} && docker-compose ps backend"
-            """
-            
-            sh """
-              ssh -i "\$SSH_KEY" \
-                -o StrictHostKeyChecking=no \
-                -o UserKnownHostsFile=/dev/null \
-                -o IdentitiesOnly=yes \
-                ${REMOTE_USER}@${REMOTE_HOST} \
-                "cd ${REMOTE_DIR} && docker-compose logs --tail=30 backend"
-            """
-          }
-        }
-      }
-    }
   }
 
   post {
@@ -270,19 +128,18 @@ pipeline {
     }
     success {
       echo """
-        ✅ Déploiement backend réussi !
+        ✅ Build backend réussi !
         
         Environnement: ${params.DEPLOY_ENV}
         Git Commit: ${env.GIT_COMMIT_SHORT}
         Build Timestamp: ${env.BUILD_TIMESTAMP}
         Docker Image: ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:latest
         
-        URL d'accès:
-        - Backend API: http://${REMOTE_HOST}:8000/api
+        Image disponible sur Docker Hub: ${DOCKER_USERNAME}/${DOCKER_IMAGE_NAME}:latest
       """
     }
     failure {
-      echo "❌ Le déploiement backend a échoué. Consultez les logs ci-dessus."
+      echo "❌ Le build backend a échoué. Consultez les logs ci-dessus."
     }
   }
 }
