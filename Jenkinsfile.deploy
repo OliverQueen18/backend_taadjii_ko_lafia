@@ -160,10 +160,18 @@ pipeline {
                 -o UserKnownHostsFile=/dev/null \
                 -o IdentitiesOnly=yes \
                 ${REMOTE_USER}@${REMOTE_HOST} \
-                "cd ${REMOTE_DIR} && \
-                 sed -i 's|image:.*backend_taadjii_ko_lafia.*|image: ${imageName}:latest|g' docker-compose.yml && \
-                 sed -i '/backend:/,/^[[:space:]]*[a-z]/ { /build:/d; /context:/d; /dockerfile:/d; }' docker-compose.yml && \
-                 sed -i '/backend:/a\\    image: ${imageName}:latest' docker-compose.yml"
+                "mkdir -p ${REMOTE_DIR} && \
+                 cd ${REMOTE_DIR} && \
+                 if [ ! -f docker-compose.yml ]; then \
+                   echo '❌ Erreur: docker-compose.yml n existe pas dans ${REMOTE_DIR}'; \
+                   exit 1; \
+                 fi && \
+                 chmod 644 docker-compose.yml && \
+                 sed -i.tmp 's|image:.*backend_taadjii_ko_lafia.*|image: ${imageName}:latest|g' docker-compose.yml && \
+                 sed -i.tmp '/backend:/,/^[[:space:]]*[a-z]/ { /build:/d; /context:/d; /dockerfile:/d; }' docker-compose.yml && \
+                 sed -i.tmp '/^[[:space:]]*backend:/a\\    image: ${imageName}:latest' docker-compose.yml && \
+                 rm -f docker-compose.yml.tmp && \
+                 echo '✅ docker-compose.yml mis à jour avec succès'"
             """
           }
         }
@@ -206,6 +214,10 @@ pipeline {
                 -o IdentitiesOnly=yes \
                 ${REMOTE_USER}@${REMOTE_HOST} \
                 "cd ${REMOTE_DIR} && \
+                 if [ ! -f docker-compose.yml ]; then \
+                   echo '❌ Erreur: docker-compose.yml n existe pas'; \
+                   exit 1; \
+                 fi && \
                  docker-compose -f docker-compose.yml pull backend && \
                  docker-compose -f docker-compose.yml up -d --no-deps backend"
             """
