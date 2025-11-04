@@ -166,11 +166,12 @@ pipeline {
                    echo '❌ Erreur: docker-compose.yml n existe pas dans ${REMOTE_DIR}'; \
                    exit 1; \
                  fi && \
-                 sed 's|image:.*backend_taadjii_ko_lafia.*|image: ${imageName}:latest|g' docker-compose.yml > docker-compose.yml.new && \
-                 sed '/backend:/,/^[[:space:]]*[a-z]/ { /build:/d; /context:/d; /dockerfile:/d; }' docker-compose.yml.new > docker-compose.yml.tmp && \
-                 sed '/^[[:space:]]*backend:/a\\    image: ${imageName}:latest' docker-compose.yml.tmp > docker-compose.yml.new && \
-                 mv docker-compose.yml.new docker-compose.yml && \
-                 rm -f docker-compose.yml.tmp && \
+                 TMP_FILE=\$(mktemp) && \
+                 sed 's|image:.*backend_taadjii_ko_lafia.*|image: ${imageName}:latest|g' docker-compose.yml > \$TMP_FILE && \
+                 sed '/backend:/,/^[[:space:]]*[a-z]/ { /build:/d; /context:/d; /dockerfile:/d; }' \$TMP_FILE > \${TMP_FILE}.2 && \
+                 sed '/^[[:space:]]*backend:/a\\    image: ${imageName}:latest' \${TMP_FILE}.2 > \$TMP_FILE && \
+                 mv \$TMP_FILE docker-compose.yml && \
+                 rm -f \${TMP_FILE}.2 && \
                  echo '✅ docker-compose.yml mis à jour avec succès'"
             """
           }
