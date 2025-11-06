@@ -12,4 +12,7 @@ public interface StationRepository extends JpaRepository<Station, Long> {
     
     @Query("SELECT s FROM Station s LEFT JOIN FETCH s.manager WHERE s.id = :id")
     Optional<Station> findByIdWithManager(@Param("id") Long id);
+    
+    @Query("SELECT COUNT(DISTINCT s) FROM Station s JOIN s.fuelStocks fs WHERE fs.isDisponible = true AND fs.stockDisponible > 0")
+    long countStationsWithAvailableStock();
 }

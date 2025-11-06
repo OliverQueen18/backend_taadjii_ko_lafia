@@ -3,6 +3,8 @@ package com.example.fuelticket.repository;
 import com.example.fuelticket.entity.User;
 import com.example.fuelticket.entity.Station;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,4 +15,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByStationsContainsAndEmailVerified(Station station, Boolean emailVerified);
     boolean existsByEmail(String email);
     boolean existsByTelephone(String telephone);
+    
+    @Query("SELECT COUNT(u) FROM User u WHERE u.role = :role")
+    long countByRole(@Param("role") User.Role role);
 }
