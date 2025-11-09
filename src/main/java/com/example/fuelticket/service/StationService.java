@@ -4,10 +4,12 @@ import com.example.fuelticket.dto.StationDto;
 import com.example.fuelticket.dto.StationWithStocksDto;
 import com.example.fuelticket.entity.Station;
 import com.example.fuelticket.entity.User;
+import com.example.fuelticket.entity.Region;
 import com.example.fuelticket.repository.StationRepository;
 import com.example.fuelticket.repository.TicketRepository;
 import com.example.fuelticket.repository.SaleScheduleRepository;
 import com.example.fuelticket.repository.UserRepository;
+import com.example.fuelticket.repository.RegionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,14 +26,15 @@ public class StationService {
     private final TicketRepository ticketRepository;
     private final SaleScheduleRepository saleScheduleRepository;
     private final UserRepository userRepository;
+    private final RegionRepository regionRepository;
 
     public List<StationDto> getAllStations() {
         // Filtrer par manager si l'utilisateur est un gérant de station
         try {
             User currentUser = authService.getCurrentUser();
             if (currentUser != null && currentUser.getRole() == User.Role.STATION) {
-                // Retourner uniquement les stations du manager
-                return stationRepository.findByManagerId(currentUser.getId()).stream()
+                // Retourner uniquement les stations du manager avec région chargée
+                return stationRepository.findByManagerIdWithRegion(currentUser.getId()).stream()
                         .map(this::convertToDto)
                         .collect(Collectors.toList());
             }
@@ -39,15 +42,15 @@ public class StationService {
             // Si l'utilisateur n'est pas authentifié ou erreur, continuer avec toutes les stations
         }
         
-        // Pour les admins ou utilisateurs non authentifiés, retourner toutes les stations
-        return stationRepository.findAll().stream()
+        // Pour les admins ou utilisateurs non authentifiés, retourner toutes les stations avec région chargée
+        return stationRepository.findAllWithRegion().stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
     
     public List<StationDto> getMyStations() {
         User currentUser = authService.getCurrentUser();
-        return stationRepository.findByManagerId(currentUser.getId()).stream()
+        return stationRepository.findByManagerIdWithRegion(currentUser.getId()).stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
@@ -57,8 +60,8 @@ public class StationService {
         try {
             User currentUser = authService.getCurrentUser();
             if (currentUser != null && currentUser.getRole() == User.Role.STATION) {
-                // Retourner uniquement les stations du manager
-                return stationRepository.findByManagerId(currentUser.getId()).stream()
+                // Retourner uniquement les stations du manager avec région et stocks chargés
+                return stationRepository.findByManagerIdWithRegionAndStocks(currentUser.getId()).stream()
                         .map(StationWithStocksDto::fromStationWithStocks)
                         .collect(Collectors.toList());
             }
@@ -67,15 +70,15 @@ public class StationService {
             // C'est utile pour les endpoints publics ou non authentifiés
         }
         
-        // Pour les admins ou utilisateurs non authentifiés, retourner toutes les stations
-        return stationRepository.findAll().stream()
+        // Pour les admins ou utilisateurs non authentifiés, retourner toutes les stations avec région et stocks chargés
+        return stationRepository.findAllWithRegionAndStocks().stream()
                 .map(StationWithStocksDto::fromStationWithStocks)
                 .collect(Collectors.toList());
     }
     
     public List<StationWithStocksDto> getMyStationsWithStocks() {
         User currentUser = authService.getCurrentUser();
-        return stationRepository.findByManagerId(currentUser.getId()).stream()
+        return stationRepository.findByManagerIdWithRegionAndStocks(currentUser.getId()).stream()
                 .map(StationWithStocksDto::fromStationWithStocks)
                 .collect(Collectors.toList());
     }
@@ -87,7 +90,7 @@ public class StationService {
     }
 
     public StationWithStocksDto getStationWithStocksById(Long id) {
-        Station station = stationRepository.findById(id)
+        Station station = stationRepository.findByIdWithRegionAndStocks(id)
                 .orElseThrow(() -> new RuntimeException("Station not found with id: " + id));
         return StationWithStocksDto.fromStationWithStocks(station);
     }
@@ -95,6 +98,15 @@ public class StationService {
     @Transactional
     public StationDto createStation(StationDto stationDto) {
         User currentUser = authService.getCurrentUser();
+        
+        // Récupérer la région
+        Region region = null;
+        if (stationDto.getRegionId() != null) {
+            region = regionRepository.findById(stationDto.getRegionId())
+                    .orElseThrow(() -> new RuntimeException("Région non trouvée avec l'id: " + stationDto.getRegionId()));
+        } else {
+            throw new RuntimeException("La région est obligatoire pour créer une station");
+        }
         
         Station.StationBuilder builder = Station.builder()
                 .nom(stationDto.getNom())
@@ -107,7 +119,8 @@ public class StationService {
                 .email(stationDto.getEmail())
                 .siteWeb(stationDto.getSiteWeb())
                 .horairesOuverture(stationDto.getHorairesOuverture())
-                .isOuverte(stationDto.getIsOuverte() != null ? stationDto.getIsOuverte() : true);
+                .isOuverte(stationDto.getIsOuverte() != null ? stationDto.getIsOuverte() : true)
+                .region(region);
         
         // Lier le manager si l'utilisateur est STATION ou ADMIN (pour ADMIN, on peut permettre de ne pas lier)
         if (currentUser.getRole() == User.Role.STATION) {
@@ -144,6 +157,13 @@ public class StationService {
         station.setEmail(stationDto.getEmail());
         station.setSiteWeb(stationDto.getSiteWeb());
         station.setHorairesOuverture(stationDto.getHorairesOuverture());
+        
+        // Mettre à jour la région si fournie
+        if (stationDto.getRegionId() != null) {
+            Region region = regionRepository.findById(stationDto.getRegionId())
+                    .orElseThrow(() -> new RuntimeException("Région non trouvée avec l'id: " + stationDto.getRegionId()));
+            station.setRegion(region);
+        }
         
         // Mettre à jour isOuverte si fourni
         if (stationDto.getIsOuverte() != null) {
@@ -222,6 +242,14 @@ public class StationService {
         dto.setHorairesOuverture(station.getHorairesOuverture());
         dto.setIsOuverte(station.getIsOuverte());
         dto.setManagerId(station.getManager() != null ? station.getManager().getId() : null);
+        
+        // Informations de la région
+        if (station.getRegion() != null) {
+            dto.setRegionId(station.getRegion().getId());
+            dto.setRegionNom(station.getRegion().getNom());
+            dto.setRegionCode(station.getRegion().getCode());
+        }
+        
         return dto;
     }
 }

@@ -26,6 +26,9 @@ public class StationWithStocksDto {
     private List<FuelStockDto> fuelStocks;
     private List<String> typesCarburantDisponibles;
     private Long managerId; // ID du gérant de la station
+    private Long regionId; // ID de la région
+    private String regionNom; // Nom de la région
+    private String regionCode; // Code de la région
     
     public static StationWithStocksDto fromStationWithStocks(com.example.fuelticket.entity.Station station) {
         List<FuelStockDto> fuelStockDtos = station.getFuelStocks() != null ?
@@ -54,6 +57,9 @@ public class StationWithStocksDto {
                 .fuelStocks(fuelStockDtos)
                 .typesCarburantDisponibles(typesDisponibles)
                 .managerId(station.getManager() != null ? station.getManager().getId() : null)
+                .regionId(station.getRegion() != null ? station.getRegion().getId() : null)
+                .regionNom(station.getRegion() != null ? station.getRegion().getNom() : null)
+                .regionCode(station.getRegion() != null ? station.getRegion().getCode() : null)
                 .build();
     }
 }

@@ -6,8 +6,10 @@ import com.example.fuelticket.dto.UserDto;
 import com.example.fuelticket.dto.StationDto;
 import com.example.fuelticket.entity.User;
 import com.example.fuelticket.entity.Station;
+import com.example.fuelticket.entity.Region;
 import com.example.fuelticket.repository.UserRepository;
 import com.example.fuelticket.repository.StationRepository;
+import com.example.fuelticket.repository.RegionRepository;
 import com.example.fuelticket.security.UserPrincipal;
 import com.example.fuelticket.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +31,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final VerificationService verificationService;
     private final StationRepository stationRepository;
+    private final RegionRepository regionRepository;
 
     public AuthResponse login(AuthRequest authRequest) {
         Authentication authentication = authenticationManager.authenticate(
@@ -55,6 +58,14 @@ public class AuthService {
     public AuthResponse register(UserDto userDto) {
         if (userRepository.findByEmail(userDto.getEmail()).isPresent()) {
             throw new RuntimeException("Un compte avec cet email existe déjà");
+        }
+
+        // Vérifier que le mot de passe est requis pour l'inscription
+        if (userDto.getPassword() == null || userDto.getPassword().trim().isEmpty()) {
+            throw new RuntimeException("Le mot de passe est obligatoire");
+        }
+        if (userDto.getPassword().length() < 6) {
+            throw new RuntimeException("Le mot de passe doit contenir au moins 6 caractères");
         }
 
         // Vérifier que le téléphone est requis pour les citoyens
@@ -88,7 +99,23 @@ public class AuthService {
         // Si l'utilisateur est un gérant de station et qu'une station est fournie, la créer automatiquement
         if (userDto.getRole() == User.Role.STATION && userDto.getStation() != null) {
             StationDto sd = userDto.getStation();
-            Station station = Station.builder()
+            
+            // Log pour déboguer
+            System.out.println("DEBUG AuthService: StationDto reçu - regionId: " + sd.getRegionId());
+            
+            // Récupérer la région
+            Region region = null;
+            if (sd.getRegionId() != null) {
+                System.out.println("DEBUG AuthService: Recherche de la région avec l'id: " + sd.getRegionId());
+                region = regionRepository.findById(sd.getRegionId())
+                        .orElseThrow(() -> new RuntimeException("Région non trouvée avec l'id: " + sd.getRegionId()));
+                System.out.println("DEBUG AuthService: Région trouvée - id: " + region.getId() + ", nom: " + region.getNom());
+            } else {
+                System.out.println("DEBUG AuthService: ERREUR - regionId est null dans StationDto");
+                throw new RuntimeException("La région est obligatoire pour créer une station");
+            }
+            
+            Station.StationBuilder stationBuilder = Station.builder()
                     .nom(sd.getNom())
                     .localisation(sd.getLocalisation())
                     .capaciteJournaliere(sd.getCapaciteJournaliere())
@@ -99,10 +126,14 @@ public class AuthService {
                     .email(sd.getEmail())
                     .siteWeb(sd.getSiteWeb())
                     .horairesOuverture(sd.getHorairesOuverture())
-                    .isOuverte(sd.getIsOuverte())
+                    .isOuverte(sd.getIsOuverte() != null ? sd.getIsOuverte() : true)
                     .manager(savedUser)
-                    .build();
+                    .region(region);
+            
+            Station station = stationBuilder.build();
+            System.out.println("DEBUG AuthService: Station créée - region: " + (station.getRegion() != null ? station.getRegion().getId() : "NULL"));
             stationRepository.save(station);
+            System.out.println("DEBUG AuthService: Station sauvegardée avec succès");
         }
         
         // Envoyer le code de vérification par email

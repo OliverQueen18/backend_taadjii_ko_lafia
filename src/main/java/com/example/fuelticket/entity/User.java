@@ -12,6 +12,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@org.hibernate.annotations.DynamicUpdate
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -24,6 +25,7 @@ public class User {
     @Column(unique = true)
     private String telephone; // Numéro de téléphone (unique)
     @Enumerated(EnumType.STRING)
+    @Column(length = 20, columnDefinition = "VARCHAR(20)") // Longueur suffisante pour GESTIONNAIRE (12 caractères)
     private Role role;
     
     // Champs pour la validation par email
@@ -46,7 +48,7 @@ public class User {
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    public enum Role { CITOYEN, STATION, ADMIN }
+    public enum Role { CITOYEN, STATION, ADMIN, GESTIONNAIRE }
     
     @PreUpdate
     public void preUpdate() {

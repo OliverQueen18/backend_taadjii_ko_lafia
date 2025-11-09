@@ -2,6 +2,7 @@ package com.example.fuelticket.dto;
 
 import com.example.fuelticket.entity.User;
 import com.example.fuelticket.validation.OptionalPattern;
+import com.example.fuelticket.validation.OptionalSize;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -26,8 +27,10 @@ public class UserDto {
     @Email(message = "Email should be valid")
     private String email;
 
-    @NotBlank(message = "Password is required")
-    @Size(min = 6, message = "Password must be at least 6 characters")
+    // Password est optionnel pour la mise à jour, mais requis pour la création
+    // La validation est gérée dans les services (createUser, register)
+    // @OptionalSize valide seulement si password est fourni (non null et non vide)
+    @OptionalSize(min = 6, message = "Password must be at least 6 characters")
     private String password;
 
     // Pattern optionnel : validé seulement si fourni (non null et non vide)

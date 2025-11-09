@@ -41,6 +41,16 @@ public class Station {
     @JoinColumn(name = "manager_id")
     private User manager;
     
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "region_id", nullable = false)
+    private Region region;
+    
+    @OneToMany(mappedBy = "station", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Repartition> repartitions;
+    
+    @OneToMany(mappedBy = "station", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Approvisionnement> approvisionnements;
+    
     // Méthodes utilitaires
     public Double getStockTotalDisponible() {
         return fuelStocks != null ? 

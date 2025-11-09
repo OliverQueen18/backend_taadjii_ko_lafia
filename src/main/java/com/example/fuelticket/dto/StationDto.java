@@ -32,4 +32,7 @@ public class StationDto {
     private String horairesOuverture;
     private Boolean isOuverte;
     private Long managerId; // ID du gérant de la station
+    private Long regionId; // ID de la région
+    private String regionNom; // Nom de la région
+    private String regionCode; // Code de la région
 }

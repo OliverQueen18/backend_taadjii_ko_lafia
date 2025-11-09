@@ -42,6 +42,14 @@ public class UserService {
             throw new RuntimeException("Email already exists!");
         }
 
+        // Vérifier que le mot de passe est requis pour la création
+        if (userDto.getPassword() == null || userDto.getPassword().trim().isEmpty()) {
+            throw new RuntimeException("Le mot de passe est obligatoire pour créer un utilisateur");
+        }
+        if (userDto.getPassword().length() < 6) {
+            throw new RuntimeException("Le mot de passe doit contenir au moins 6 caractères");
+        }
+
         // Vérifier que le téléphone est requis pour les citoyens
         if (userDto.getRole() == User.Role.CITOYEN) {
             if (userDto.getTelephone() == null || userDto.getTelephone().trim().isEmpty()) {
@@ -85,6 +93,7 @@ public class UserService {
         return convertToDto(savedUser);
     }
 
+    @Transactional
     public UserDto updateUser(Long id, UserDto userDto) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
@@ -98,14 +107,34 @@ public class UserService {
             }
         }
 
+        // Vérifier l'unicité de l'email si fourni et différent de l'actuel
+        if (userDto.getEmail() != null && !userDto.getEmail().trim().isEmpty()) {
+            if (!userDto.getEmail().equals(user.getEmail())) {
+                if (userRepository.findByEmail(userDto.getEmail()).isPresent()) {
+                    throw new RuntimeException("Un compte avec cet email existe déjà");
+                }
+            }
+        }
+
         user.setNom(userDto.getNom());
         user.setPrenom(userDto.getPrenom());
         user.setEmail(userDto.getEmail());
-        if (userDto.getPassword() != null && !userDto.getPassword().isEmpty()) {
+        if (userDto.getPassword() != null && !userDto.getPassword().trim().isEmpty()) {
+            if (userDto.getPassword().length() < 6) {
+                throw new RuntimeException("Le mot de passe doit contenir au moins 6 caractères");
+            }
             user.setPassword(passwordEncoder.encode(userDto.getPassword()));
         }
         user.setTelephone(userDto.getTelephone());
         user.setRole(userDto.getRole());
+        
+        // Mettre à jour emailVerified si fourni
+        if (userDto.getEmailVerified() != null) {
+            user.setEmailVerified(userDto.getEmailVerified());
+        }
+
+        // Ne pas toucher aux champs de vérification (verificationCode, verificationCodeExpiry, etc.)
+        // Ces champs sont gérés par VerificationService uniquement
 
         User savedUser = userRepository.save(user);
         return convertToDto(savedUser);
