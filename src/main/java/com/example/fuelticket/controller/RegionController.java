@@ -3,6 +3,7 @@ package com.example.fuelticket.controller;
 import com.example.fuelticket.dto.RegionDto;
 import com.example.fuelticket.dto.CreateRegionRequest;
 import com.example.fuelticket.service.RegionService;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +21,7 @@ public class RegionController {
     private final RegionService regionService;
     
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
+    @Operation(summary = "Get all regions", description = "Retrieve all regions. Public endpoint for filters.")
     public ResponseEntity<List<RegionDto>> getAllRegions() {
         return ResponseEntity.ok(regionService.getAllRegions());
     }

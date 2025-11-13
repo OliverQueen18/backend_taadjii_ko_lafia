@@ -23,16 +23,14 @@ public class StationController {
     private final StationService stationService;
 
     @GetMapping
-    @Operation(summary = "Get all stations", description = "Retrieve all stations")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE') or hasRole('STATION')")
+    @Operation(summary = "Get all stations", description = "Retrieve all stations. Public endpoint for home page.")
     public ResponseEntity<List<StationDto>> getAllStations() {
         List<StationDto> stations = stationService.getAllStations();
         return ResponseEntity.ok(stations);
     }
 
     @GetMapping("/with-stocks")
-    @Operation(summary = "Get all stations with stocks", description = "Retrieve all stations with their fuel stocks. For STATION role, returns only manager's stations.")
-    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE') or hasRole('STATION')")
+    @Operation(summary = "Get all stations with stocks", description = "Retrieve all stations with their fuel stocks. Public endpoint for home page.")
     public ResponseEntity<List<StationWithStocksDto>> getAllStationsWithStocks() {
         List<StationWithStocksDto> stations = stationService.getAllStationsWithStocks();
         return ResponseEntity.ok(stations);

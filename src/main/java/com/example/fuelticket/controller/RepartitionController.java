@@ -3,6 +3,7 @@ package com.example.fuelticket.controller;
 import com.example.fuelticket.dto.RepartitionDto;
 import com.example.fuelticket.dto.CreateRepartitionRequest;
 import com.example.fuelticket.service.RepartitionService;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +21,7 @@ public class RepartitionController {
     private final RepartitionService repartitionService;
     
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
+    @Operation(summary = "Get all repartitions", description = "Retrieve all repartitions. Public endpoint for filters.")
     public ResponseEntity<List<RepartitionDto>> getAllRepartitions() {
         return ResponseEntity.ok(repartitionService.getAllRepartitions());
     }

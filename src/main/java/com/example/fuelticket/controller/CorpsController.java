@@ -3,6 +3,7 @@ package com.example.fuelticket.controller;
 import com.example.fuelticket.dto.CorpsDto;
 import com.example.fuelticket.dto.CreateCorpsRequest;
 import com.example.fuelticket.service.CorpsService;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,7 +21,7 @@ public class CorpsController {
     private final CorpsService corpsService;
     
     @GetMapping
-    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
+    @Operation(summary = "Get all corps", description = "Retrieve all corps. Public endpoint for filters.")
     public ResponseEntity<List<CorpsDto>> getAllCorps() {
         return ResponseEntity.ok(corpsService.getAllCorps());
     }
