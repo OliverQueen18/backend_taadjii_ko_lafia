@@ -9,8 +9,9 @@ public class ApprovisionnementDto {
     private Long id;
     private Long societeId;
     private String societeNom;
-    private Long stationId;
-    private String stationNom;
+    private Long regionId;
+    private String regionNom;
+    private String regionCode;
     private FuelStock.FuelType fuelType;
     private String fuelTypeDisplayName;
     private Double quantite;

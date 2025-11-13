@@ -11,6 +11,8 @@ import com.example.fuelticket.repository.SaleScheduleRepository;
 import com.example.fuelticket.repository.UserRepository;
 import com.example.fuelticket.repository.RegionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ public class StationService {
     private final UserRepository userRepository;
     private final RegionRepository regionRepository;
 
+    @Cacheable(value = "stations", key = "'all'")
     public List<StationDto> getAllStations() {
         // Filtrer par manager si l'utilisateur est un gérant de station
         try {
@@ -48,6 +51,8 @@ public class StationService {
                 .collect(Collectors.toList());
     }
     
+    // Note: getMyStations() n'est pas mis en cache car il dépend de l'utilisateur actuel
+    // Le cache serait trop complexe à gérer avec des clés dynamiques basées sur l'utilisateur
     public List<StationDto> getMyStations() {
         User currentUser = authService.getCurrentUser();
         return stationRepository.findByManagerIdWithRegion(currentUser.getId()).stream()
@@ -55,6 +60,7 @@ public class StationService {
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "stations", key = "'all-with-stocks'")
     public List<StationWithStocksDto> getAllStationsWithStocks() {
         // Filtrer par manager si l'utilisateur est un gérant de station
         try {
@@ -76,6 +82,7 @@ public class StationService {
                 .collect(Collectors.toList());
     }
     
+    // Note: getMyStationsWithStocks() n'est pas mis en cache car il dépend de l'utilisateur actuel
     public List<StationWithStocksDto> getMyStationsWithStocks() {
         User currentUser = authService.getCurrentUser();
         return stationRepository.findByManagerIdWithRegionAndStocks(currentUser.getId()).stream()
@@ -83,6 +90,7 @@ public class StationService {
                 .collect(Collectors.toList());
     }
 
+    @Cacheable(value = "stations", key = "#id")
     public StationDto getStationById(Long id) {
         Station station = stationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Station not found with id: " + id));
@@ -96,6 +104,7 @@ public class StationService {
     }
 
     @Transactional
+    @CacheEvict(value = "stations", allEntries = true)
     public StationDto createStation(StationDto stationDto) {
         User currentUser = authService.getCurrentUser();
         
@@ -133,6 +142,7 @@ public class StationService {
     }
 
     @Transactional
+    @CacheEvict(value = "stations", allEntries = true)
     public StationDto updateStation(Long id, StationDto stationDto) {
         Station station = stationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Station not found with id: " + id));
@@ -184,6 +194,7 @@ public class StationService {
     }
 
     @Transactional
+    @CacheEvict(value = "stations", allEntries = true)
     public void deleteStation(Long id) {
         Station station = stationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Station non trouvée avec l'id: " + id));

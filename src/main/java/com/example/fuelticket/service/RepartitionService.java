@@ -10,6 +10,8 @@ import com.example.fuelticket.repository.RepartitionRepository;
 import com.example.fuelticket.repository.CorpsRepository;
 import com.example.fuelticket.repository.StationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,7 @@ public class RepartitionService {
     private final StationRepository stationRepository;
     private final AuthService authService;
     
+    @Cacheable(value = "repartitions", key = "'all'")
     public List<RepartitionDto> getAllRepartitions() {
         return repartitionRepository.findAll().stream()
                 .map(this::convertToDto)
@@ -54,6 +57,7 @@ public class RepartitionService {
     }
     
     @Transactional
+    @CacheEvict(value = "repartitions", allEntries = true)
     public RepartitionDto createRepartition(CreateRepartitionRequest request) {
         // Vérifier que l'utilisateur est GESTIONNAIRE ou ADMIN
         User currentUser = authService.getCurrentUser();
@@ -83,6 +87,7 @@ public class RepartitionService {
     }
     
     @Transactional
+    @CacheEvict(value = "repartitions", allEntries = true)
     public RepartitionDto updateRepartition(Long id, CreateRepartitionRequest request) {
         // Vérifier que l'utilisateur est GESTIONNAIRE ou ADMIN
         User currentUser = authService.getCurrentUser();
@@ -116,6 +121,7 @@ public class RepartitionService {
     }
     
     @Transactional
+    @CacheEvict(value = "repartitions", allEntries = true)
     public void deleteRepartition(Long id) {
         // Vérifier que l'utilisateur est GESTIONNAIRE ou ADMIN
         User currentUser = authService.getCurrentUser();

@@ -11,8 +11,8 @@ public class CreateApprovisionnementRequest {
     @NotNull(message = "L'ID de la société est obligatoire")
     private Long societeId;
     
-    @NotNull(message = "L'ID de la station est obligatoire")
-    private Long stationId;
+    @NotNull(message = "L'ID de la région est obligatoire")
+    private Long regionId;
     
     @NotNull(message = "Le type de carburant est obligatoire")
     private FuelStock.FuelType fuelType;

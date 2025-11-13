@@ -5,6 +5,8 @@ import com.example.fuelticket.dto.CreateSocieteRequest;
 import com.example.fuelticket.entity.Societe;
 import com.example.fuelticket.repository.SocieteRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +19,14 @@ public class SocieteService {
     
     private final SocieteRepository societeRepository;
     
+    @Cacheable(value = "societes", key = "'all'")
     public List<SocieteDto> getAllSocietes() {
         return societeRepository.findAll().stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
     
+    @Cacheable(value = "societes", key = "#id")
     public SocieteDto getSocieteById(Long id) {
         Societe societe = societeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Société non trouvée avec l'id: " + id));
@@ -30,6 +34,7 @@ public class SocieteService {
     }
     
     @Transactional
+    @CacheEvict(value = "societes", allEntries = true)
     public SocieteDto createSociete(CreateSocieteRequest request) {
         // Vérifier si une société avec le même nom existe déjà
         if (societeRepository.findByNom(request.getNom()).isPresent()) {
@@ -51,6 +56,7 @@ public class SocieteService {
     }
     
     @Transactional
+    @CacheEvict(value = "societes", allEntries = true)
     public SocieteDto updateSociete(Long id, CreateSocieteRequest request) {
         Societe societe = societeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Société non trouvée avec l'id: " + id));
@@ -76,6 +82,7 @@ public class SocieteService {
     }
     
     @Transactional
+    @CacheEvict(value = "societes", allEntries = true)
     public void deleteSociete(Long id) {
         Societe societe = societeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Société non trouvée avec l'id: " + id));

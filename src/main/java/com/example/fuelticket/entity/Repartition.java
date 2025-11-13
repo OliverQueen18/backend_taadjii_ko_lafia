@@ -2,6 +2,8 @@ package com.example.fuelticket.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
 
 @Entity
 @Getter
@@ -10,6 +12,8 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 @Table(name = "repartition")
+@Cacheable
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE, region = "com.example.fuelticket.entity.Repartition")
 public class Repartition {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

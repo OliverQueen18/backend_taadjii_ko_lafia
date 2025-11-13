@@ -7,6 +7,7 @@ import com.example.fuelticket.entity.*;
 import com.example.fuelticket.repository.*;
 import com.example.fuelticket.service.SaleScheduleService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TicketService {
     private final TicketRepository ticketRepository;
     private final StationRepository stationRepository;
@@ -498,27 +500,47 @@ public class TicketService {
             throw new RuntimeException("Vous n'avez pas la permission d'accéder à ce ticket");
         }
         
-        if (ticket.getPdfPath() == null || ticket.getPdfPath().isEmpty()) {
-            // Générer le PDF s'il n'existe pas
-            try {
-                // S'assurer que le QR code est généré
-                if (ticket.getQrCodeData() == null || ticket.getQrCodeData().isEmpty()) {
-                    String qrCodeData = pdfGenerationService.generateQRCodeData(ticket);
-                    ticket.setQrCodeData(qrCodeData);
-                    ticket = ticketRepository.save(ticket);
-                }
-                
-                String pdfPath = pdfGenerationService.generateTicketPdf(ticket);
-                ticket.setPdfPath(pdfPath);
+        // Toujours régénérer le PDF pour s'assurer qu'il est à jour
+        try {
+            // S'assurer que le QR code est généré
+            if (ticket.getQrCodeData() == null || ticket.getQrCodeData().isEmpty()) {
+                String qrCodeData = pdfGenerationService.generateQRCodeData(ticket);
+                ticket.setQrCodeData(qrCodeData);
                 ticket = ticketRepository.save(ticket);
-            } catch (Exception e) {
-                throw new RuntimeException("Erreur lors de la génération du PDF: " + e.getMessage(), e);
             }
+            
+            // Générer le PDF (régénérer même s'il existe déjà pour être sûr qu'il est à jour)
+            String pdfPath = pdfGenerationService.generateTicketPdf(ticket);
+            ticket.setPdfPath(pdfPath);
+            ticket = ticketRepository.save(ticket);
+        } catch (Exception e) {
+            log.error("Erreur lors de la génération du PDF pour le ticket {}: {}", ticket.getId(), e.getMessage(), e);
+            throw new RuntimeException("Erreur lors de la génération du PDF: " + e.getMessage(), e);
         }
         
-        File pdfFile = new File(ticket.getPdfPath());
+        // Normaliser le chemin pour gérer les séparateurs Windows/Linux
+        String normalizedPath = ticket.getPdfPath().replace("/", File.separator).replace("\\", File.separator);
+        File pdfFile = new File(normalizedPath);
+        
+        // Si le fichier n'existe toujours pas, essayer avec le chemin absolu
         if (!pdfFile.exists()) {
-            throw new RuntimeException("Le fichier PDF n'existe pas: " + ticket.getPdfPath());
+            // Essayer avec le chemin tel quel
+            pdfFile = new File(ticket.getPdfPath());
+            if (!pdfFile.exists()) {
+                // Essayer de trouver le fichier dans le répertoire de travail
+                Path workDir = Paths.get(System.getProperty("user.dir"));
+                Path possiblePath = workDir.resolve("tickets").resolve("ticket_" + ticket.getNumeroTicket() + ".pdf");
+                if (Files.exists(possiblePath)) {
+                    pdfFile = possiblePath.toFile();
+                } else {
+                    log.error("Fichier PDF introuvable. Chemins testés:");
+                    log.error("  - {}", normalizedPath);
+                    log.error("  - {}", ticket.getPdfPath());
+                    log.error("  - {}", possiblePath.toAbsolutePath());
+                    throw new RuntimeException("Le fichier PDF n'existe pas: " + ticket.getPdfPath() + 
+                                             ". Chemins testés: " + normalizedPath + ", " + possiblePath.toAbsolutePath());
+                }
+            }
         }
         
         Resource resource = new FileSystemResource(pdfFile);

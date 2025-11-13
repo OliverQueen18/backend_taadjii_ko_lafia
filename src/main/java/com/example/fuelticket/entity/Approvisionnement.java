@@ -2,6 +2,8 @@ package com.example.fuelticket.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
 
 import java.time.LocalDateTime;
 
@@ -12,6 +14,8 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @Table(name = "approvisionnement")
+@Cacheable
+@Cache(usage = CacheConcurrencyStrategy.READ_WRITE, region = "com.example.fuelticket.entity.Approvisionnement")
 public class Approvisionnement {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -22,8 +26,8 @@ public class Approvisionnement {
     private Societe societe;
     
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "station_id", nullable = false)
-    private Station station;
+    @JoinColumn(name = "region_id", nullable = false)
+    private Region region;
     
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

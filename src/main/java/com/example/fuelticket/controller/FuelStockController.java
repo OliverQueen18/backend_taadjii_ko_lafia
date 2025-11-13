@@ -27,6 +27,7 @@ public class FuelStockController {
 
     @GetMapping("/station/{stationId}")
     @Operation(summary = "Get fuel stocks by station", description = "Get all fuel stocks for a specific station")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE') or hasRole('STATION')")
     public ResponseEntity<List<FuelStockDto>> getFuelStocksByStation(@PathVariable Long stationId) {
         List<FuelStockDto> stocks = fuelStockService.getFuelStocksByStation(stationId);
         return ResponseEntity.ok(stocks);
@@ -34,6 +35,7 @@ public class FuelStockController {
 
     @GetMapping("/station/{stationId}/available")
     @Operation(summary = "Get available fuel stocks by station", description = "Get only available fuel stocks for a specific station")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE') or hasRole('STATION')")
     public ResponseEntity<List<FuelStockDto>> getAvailableFuelStocksByStation(@PathVariable Long stationId) {
         List<FuelStockDto> stocks = fuelStockService.getAvailableFuelStocksByStation(stationId);
         return ResponseEntity.ok(stocks);

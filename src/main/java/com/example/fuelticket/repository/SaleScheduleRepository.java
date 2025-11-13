@@ -33,5 +33,8 @@ public interface SaleScheduleRepository extends JpaRepository<SaleSchedule, Long
     @Query("SELECT s FROM SaleSchedule s WHERE s.saleDate < :date AND s.isActive = true")
     List<SaleSchedule> findExpiredSchedules(@Param("date") LocalDate date);
     
+    @Query("SELECT DISTINCT s FROM SaleSchedule s LEFT JOIN FETCH s.station LEFT JOIN FETCH s.tickets ORDER BY s.saleDate DESC, s.startTime")
+    List<SaleSchedule> findAllWithRelations();
+    
     boolean existsByStationAndSaleDateAndFuelTypeAndIsActiveTrue(Station station, LocalDate saleDate, SaleSchedule.FuelType fuelType);
 }

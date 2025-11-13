@@ -1,9 +1,20 @@
 package com.example.fuelticket.service;
 
 import com.example.fuelticket.entity.User;
+import com.example.fuelticket.entity.PendingRegistration;
+import com.example.fuelticket.entity.Station;
+import com.example.fuelticket.entity.Region;
 import com.example.fuelticket.repository.UserRepository;
+import com.example.fuelticket.repository.PendingRegistrationRepository;
+import com.example.fuelticket.repository.StationRepository;
+import com.example.fuelticket.repository.RegionRepository;
+import com.example.fuelticket.dto.UserDto;
+import com.example.fuelticket.dto.StationDto;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
@@ -16,6 +27,11 @@ public class VerificationService {
     private final UserRepository userRepository;
     private final EmailService emailService;
     private final SmsService smsService;
+    private final PendingRegistrationRepository pendingRegistrationRepository;
+    private final StationRepository stationRepository;
+    private final RegionRepository regionRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final ObjectMapper objectMapper;
     
     private static final int CODE_LENGTH = 6;
     private static final int CODE_EXPIRY_MINUTES = 15;
@@ -68,7 +84,41 @@ public class VerificationService {
         smsService.sendVerificationSms(user.getTelephone(), user.getNom(), verificationCode);
     }
     
+    /**
+     * Vérifie le code de vérification email et crée l'utilisateur si le code est valide
+     * L'utilisateur n'est créé dans la table User qu'après vérification réussie
+     */
+    @Transactional
     public boolean verifyCode(String email, String code) {
+        // Chercher d'abord dans les inscriptions en attente
+        Optional<PendingRegistration> pendingOpt = pendingRegistrationRepository.findByEmail(email);
+        
+        if (pendingOpt.isPresent()) {
+            // Inscription en attente trouvée - vérifier le code
+            PendingRegistration pending = pendingOpt.get();
+            
+            // Vérifier si le code correspond et n'est pas expiré
+            if (pending.getVerificationCode() == null || 
+                !pending.getVerificationCode().equals(code) ||
+                pending.isEmailCodeExpired()) {
+                return false;
+            }
+            
+            // Créer l'utilisateur maintenant que le code est vérifié
+            // Le téléphoneVerified sera lu depuis pending.telephoneVerified
+            User user = createUserFromPendingRegistration(pending);
+            
+            // Marquer l'inscription comme vérifiée et la supprimer
+            pending.setVerifiedAt(LocalDateTime.now());
+            pendingRegistrationRepository.delete(pending);
+            
+            // Envoyer l'email de bienvenue
+            emailService.sendWelcomeEmail(user.getEmail(), user.getNom(), user.getRole().toString());
+            
+            return true;
+        }
+        
+        // Fallback : chercher dans les utilisateurs existants (pour compatibilité avec les anciens comptes)
         Optional<User> userOpt = userRepository.findByEmail(email);
         
         if (userOpt.isEmpty()) {
@@ -99,7 +149,95 @@ public class VerificationService {
         return true;
     }
     
+    /**
+     * Crée un utilisateur à partir d'une inscription en attente vérifiée
+     */
+    @Transactional
+    private User createUserFromPendingRegistration(PendingRegistration pending) {
+        try {
+            // Désérialiser les données utilisateur
+            UserDto userDto = objectMapper.readValue(pending.getUserDataJson(), UserDto.class);
+            
+            // Vérifier à nouveau que l'email n'existe pas (au cas où)
+            if (userRepository.findByEmail(userDto.getEmail()).isPresent()) {
+                throw new RuntimeException("Un compte avec cet email existe déjà");
+            }
+            
+            // Créer l'utilisateur
+            User user = User.builder()
+                    .nom(userDto.getNom())
+                    .prenom(userDto.getPrenom())
+                    .email(userDto.getEmail())
+                    .password(passwordEncoder.encode(userDto.getPassword()))
+                    .telephone(userDto.getTelephone())
+                    .role(userDto.getRole())
+                    .emailVerified(true) // Email vérifié car le code a été validé
+                    .telephoneVerified(pending.getTelephoneVerified() != null ? pending.getTelephoneVerified() : false) // Téléphone vérifié si le code SMS a été validé
+                    .build();
+            
+            User savedUser = userRepository.save(user);
+            
+            // Si c'est un gérant de station et qu'une station est fournie, la créer
+            if (userDto.getRole() == User.Role.STATION && userDto.getStation() != null) {
+                StationDto sd = userDto.getStation();
+                
+                // Récupérer la région
+                Region region = null;
+                if (sd.getRegionId() != null) {
+                    region = regionRepository.findById(sd.getRegionId())
+                            .orElseThrow(() -> new RuntimeException("Région non trouvée avec l'id: " + sd.getRegionId()));
+                } else {
+                    throw new RuntimeException("La région est obligatoire pour créer une station");
+                }
+                
+                Station station = Station.builder()
+                        .nom(sd.getNom())
+                        .localisation(sd.getLocalisation())
+                        .capaciteJournaliere(sd.getCapaciteJournaliere())
+                        .adresseComplete(sd.getAdresseComplete())
+                        .latitude(sd.getLatitude())
+                        .longitude(sd.getLongitude())
+                        .telephone(sd.getTelephone())
+                        .email(sd.getEmail())
+                        .siteWeb(sd.getSiteWeb())
+                        .horairesOuverture(sd.getHorairesOuverture())
+                        .isOuverte(sd.getIsOuverte() != null ? sd.getIsOuverte() : true)
+                        .manager(savedUser)
+                        .region(region)
+                        .build();
+                
+                stationRepository.save(station);
+            }
+            
+            return savedUser;
+        } catch (Exception e) {
+            throw new RuntimeException("Erreur lors de la création de l'utilisateur depuis l'inscription en attente", e);
+        }
+    }
+    
+    /**
+     * Envoie un email de vérification pour une inscription en attente (sans utilisateur)
+     */
+    public void sendVerificationEmailForPending(String email, String nom, String code) {
+        emailService.sendVerificationEmail(email, nom, code);
+    }
+    
+    /**
+     * Envoie un SMS de vérification pour une inscription en attente (sans utilisateur)
+     */
+    public void sendVerificationSmsForPending(String telephone, String nom, String code) {
+        smsService.sendVerificationSms(telephone, nom, code);
+    }
+    
     public boolean isCodeExpired(String email) {
+        // Chercher d'abord dans les inscriptions en attente
+        Optional<PendingRegistration> pendingOpt = pendingRegistrationRepository.findByEmail(email);
+        
+        if (pendingOpt.isPresent()) {
+            return pendingOpt.get().isEmailCodeExpired();
+        }
+        
+        // Fallback : chercher dans les utilisateurs existants
         Optional<User> userOpt = userRepository.findByEmail(email);
         
         if (userOpt.isEmpty()) {
@@ -113,10 +251,38 @@ public class VerificationService {
     }
     
     public void resendVerificationCode(String email) {
+        // Chercher d'abord dans les inscriptions en attente
+        Optional<PendingRegistration> pendingOpt = pendingRegistrationRepository.findByEmail(email);
+        
+        if (pendingOpt.isPresent()) {
+            PendingRegistration pending = pendingOpt.get();
+            
+            // Générer un nouveau code
+            String newCode = generateVerificationCode();
+            LocalDateTime now = LocalDateTime.now();
+            
+            pending.setVerificationCode(newCode);
+            pending.setVerificationCodeExpiry(now.plusMinutes(CODE_EXPIRY_MINUTES));
+            
+            pendingRegistrationRepository.save(pending);
+            
+            // Envoyer le nouveau code par email
+            // Extraire le nom depuis les données JSON
+            try {
+                UserDto userDto = objectMapper.readValue(pending.getUserDataJson(), UserDto.class);
+                sendVerificationEmailForPending(email, userDto.getNom(), newCode);
+            } catch (Exception e) {
+                sendVerificationEmailForPending(email, "Utilisateur", newCode);
+            }
+            
+            return;
+        }
+        
+        // Fallback : chercher dans les utilisateurs existants
         Optional<User> userOpt = userRepository.findByEmail(email);
         
         if (userOpt.isEmpty()) {
-            throw new RuntimeException("Utilisateur non trouvé");
+            throw new RuntimeException("Aucune inscription en attente ou utilisateur trouvé avec cet email");
         }
         
         User user = userOpt.get();
@@ -144,8 +310,34 @@ public class VerificationService {
     
     /**
      * Vérifie le code de vérification du téléphone
+     * Si l'utilisateur n'existe pas encore (inscription en attente), vérifie seulement le code
+     * L'utilisateur sera créé lors de la vérification de l'email
      */
+    @Transactional
     public boolean verifyTelephoneCode(String telephone, String code) {
+        // Chercher d'abord dans les inscriptions en attente
+        Optional<PendingRegistration> pendingOpt = pendingRegistrationRepository.findByTelephone(telephone);
+        
+        if (pendingOpt.isPresent()) {
+            // Inscription en attente trouvée - vérifier le code SMS
+            PendingRegistration pending = pendingOpt.get();
+            
+            // Vérifier si le code correspond et n'est pas expiré
+            if (pending.getTelephoneVerificationCode() == null || 
+                !pending.getTelephoneVerificationCode().equals(code) ||
+                pending.isTelephoneCodeExpired()) {
+                return false;
+            }
+            
+            // Marquer le téléphone comme vérifié dans l'inscription en attente
+            // L'utilisateur sera créé lors de la vérification de l'email avec telephoneVerified = true
+            pending.setTelephoneVerified(true);
+            pendingRegistrationRepository.save(pending);
+            
+            return true;
+        }
+        
+        // Fallback : chercher dans les utilisateurs existants (pour compatibilité)
         Optional<User> userOpt = userRepository.findByTelephone(telephone);
         
         if (userOpt.isEmpty()) {
@@ -177,10 +369,38 @@ public class VerificationService {
      * Renvoie le code de vérification du téléphone
      */
     public void resendTelephoneVerificationCode(String telephone) {
+        // Chercher d'abord dans les inscriptions en attente
+        Optional<PendingRegistration> pendingOpt = pendingRegistrationRepository.findByTelephone(telephone);
+        
+        if (pendingOpt.isPresent()) {
+            PendingRegistration pending = pendingOpt.get();
+            
+            // Générer un nouveau code SMS
+            String newCode = generateVerificationCode();
+            LocalDateTime now = LocalDateTime.now();
+            
+            pending.setTelephoneVerificationCode(newCode);
+            pending.setTelephoneVerificationCodeExpiry(now.plusMinutes(CODE_EXPIRY_MINUTES));
+            
+            pendingRegistrationRepository.save(pending);
+            
+            // Envoyer le nouveau code par SMS
+            // Extraire le nom depuis les données JSON
+            try {
+                UserDto userDto = objectMapper.readValue(pending.getUserDataJson(), UserDto.class);
+                sendVerificationSmsForPending(telephone, userDto.getNom(), newCode);
+            } catch (Exception e) {
+                sendVerificationSmsForPending(telephone, "Utilisateur", newCode);
+            }
+            
+            return;
+        }
+        
+        // Fallback : chercher dans les utilisateurs existants
         Optional<User> userOpt = userRepository.findByTelephone(telephone);
         
         if (userOpt.isEmpty()) {
-            throw new RuntimeException("Utilisateur non trouvé avec ce numéro de téléphone");
+            throw new RuntimeException("Aucune inscription en attente ou utilisateur trouvé avec ce numéro de téléphone");
         }
         
         User user = userOpt.get();

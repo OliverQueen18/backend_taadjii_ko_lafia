@@ -6,6 +6,8 @@ import com.example.fuelticket.entity.Corps;
 import com.example.fuelticket.entity.User;
 import com.example.fuelticket.repository.CorpsRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,12 +21,14 @@ public class CorpsService {
     private final CorpsRepository corpsRepository;
     private final AuthService authService;
     
+    @Cacheable(value = "corps", key = "'all'")
     public List<CorpsDto> getAllCorps() {
         return corpsRepository.findAll().stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
     
+    @Cacheable(value = "corps", key = "#id")
     public CorpsDto getCorpsById(Long id) {
         Corps corps = corpsRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Corps non trouvé avec l'id: " + id));
@@ -32,6 +36,7 @@ public class CorpsService {
     }
     
     @Transactional
+    @CacheEvict(value = "corps", allEntries = true)
     public CorpsDto createCorps(CreateCorpsRequest request) {
         // Vérifier que l'utilisateur est GESTIONNAIRE ou ADMIN
         User currentUser = authService.getCurrentUser();
@@ -54,6 +59,7 @@ public class CorpsService {
     }
     
     @Transactional
+    @CacheEvict(value = "corps", allEntries = true)
     public CorpsDto updateCorps(Long id, CreateCorpsRequest request) {
         // Vérifier que l'utilisateur est GESTIONNAIRE ou ADMIN
         User currentUser = authService.getCurrentUser();
@@ -80,6 +86,7 @@ public class CorpsService {
     }
     
     @Transactional
+    @CacheEvict(value = "corps", allEntries = true)
     public void deleteCorps(Long id) {
         // Vérifier que l'utilisateur est GESTIONNAIRE ou ADMIN
         User currentUser = authService.getCurrentUser();

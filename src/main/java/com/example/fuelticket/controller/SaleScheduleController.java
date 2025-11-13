@@ -34,9 +34,25 @@ public class SaleScheduleController {
     
     @GetMapping("/station/{stationId}")
     @Operation(summary = "Get sale schedules by station", description = "Get all active sale schedules for a station")
-    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<List<SaleScheduleDto>> getSaleSchedulesByStation(@PathVariable Long stationId) {
         List<SaleScheduleDto> schedules = saleScheduleService.getSaleSchedulesByStation(stationId);
+        return ResponseEntity.ok(schedules);
+    }
+    
+    @GetMapping("/station/{stationId}/all")
+    @Operation(summary = "Get all sale schedules by station (including inactive)", description = "Get all sale schedules for a station (active and inactive)")
+    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
+    public ResponseEntity<List<SaleScheduleDto>> getAllSaleSchedulesByStation(@PathVariable Long stationId) {
+        List<SaleScheduleDto> schedules = saleScheduleService.getAllSaleSchedulesByStation(stationId);
+        return ResponseEntity.ok(schedules);
+    }
+    
+    @GetMapping("/all")
+    @Operation(summary = "Get all sale schedules", description = "Get all sale schedules from all stations")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE') or hasRole('STATION')")
+    public ResponseEntity<List<SaleScheduleDto>> getAllSaleSchedules() {
+        List<SaleScheduleDto> schedules = saleScheduleService.getAllSaleSchedules();
         return ResponseEntity.ok(schedules);
     }
     

@@ -40,7 +40,7 @@ public class TicketController {
 
     @GetMapping
     @Operation(summary = "Get all tickets", description = "Retrieve all tickets")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<List<TicketDto>> getAllTickets() {
         List<TicketDto> tickets = ticketService.getAllTickets();
         return ResponseEntity.ok(tickets);
@@ -48,6 +48,7 @@ public class TicketController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get ticket by ID", description = "Retrieve a ticket by its ID")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE') or hasRole('STATION') or hasRole('CITOYEN')")
     public ResponseEntity<TicketDto> getTicketById(@PathVariable Long id) {
         TicketDto ticket = ticketService.getTicketById(id);
         return ResponseEntity.ok(ticket);
@@ -55,7 +56,7 @@ public class TicketController {
 
     @GetMapping("/by-number/{numeroTicket}")
     @Operation(summary = "Get ticket by number", description = "Retrieve a ticket by its numeroTicket")
-    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<TicketDto> getTicketByNumeroTicket(@PathVariable String numeroTicket) {
         TicketDto ticket = ticketService.getTicketByNumeroTicket(numeroTicket);
         return ResponseEntity.ok(ticket);
@@ -72,7 +73,7 @@ public class TicketController {
 
     @GetMapping("/station/{stationId}")
     @Operation(summary = "Get tickets by station", description = "Get all tickets for a specific station")
-    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<List<TicketDto>> getTicketsByStation(@PathVariable Long stationId) {
         List<TicketDto> tickets = ticketService.getTicketsByStation(stationId);
         return ResponseEntity.ok(tickets);
@@ -107,7 +108,7 @@ public class TicketController {
 
     @GetMapping("/pending-by-email")
     @Operation(summary = "Get pending tickets by email", description = "Get pending tickets for a specific email (for cash tickets)")
-    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<List<TicketDto>> getPendingTicketsByEmail(@RequestParam String email) {
         List<TicketDto> tickets = ticketService.getTicketsEnAttenteByEmail(email);
         return ResponseEntity.ok(tickets);
@@ -124,7 +125,7 @@ public class TicketController {
 
     @GetMapping("/check-pending-email")
     @Operation(summary = "Check if email has pending tickets", description = "Check if an email has any pending tickets")
-    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<Boolean> checkPendingTicketsByEmail(@RequestParam String email) {
         boolean hasPending = ticketService.hasTicketEnAttenteByEmail(email);
         return ResponseEntity.ok(hasPending);
@@ -150,7 +151,7 @@ public class TicketController {
 
     @GetMapping("/{id}/pdf")
     @Operation(summary = "Download ticket PDF", description = "Download the PDF receipt for a ticket")
-    @PreAuthorize("hasRole('CITOYEN') or hasRole('STATION') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('CITOYEN') or hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<org.springframework.core.io.Resource> downloadTicketPdf(@PathVariable Long id) {
         return ticketService.downloadTicketPdf(id);
     }

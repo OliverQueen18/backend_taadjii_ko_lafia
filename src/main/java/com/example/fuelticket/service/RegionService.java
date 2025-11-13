@@ -5,6 +5,8 @@ import com.example.fuelticket.dto.CreateRegionRequest;
 import com.example.fuelticket.entity.Region;
 import com.example.fuelticket.repository.RegionRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +19,14 @@ public class RegionService {
     
     private final RegionRepository regionRepository;
     
+    @Cacheable(value = "regions", key = "'all'")
     public List<RegionDto> getAllRegions() {
         return regionRepository.findAll().stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
     
+    @Cacheable(value = "regions", key = "#id")
     public RegionDto getRegionById(Long id) {
         Region region = regionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Région non trouvée avec l'id: " + id));
@@ -30,6 +34,7 @@ public class RegionService {
     }
     
     @Transactional
+    @CacheEvict(value = "regions", allEntries = true)
     public RegionDto createRegion(CreateRegionRequest request) {
         // Vérifier si une région avec le même code existe déjà
         if (regionRepository.findByCode(request.getCode()).isPresent()) {
@@ -48,6 +53,7 @@ public class RegionService {
     }
     
     @Transactional
+    @CacheEvict(value = "regions", allEntries = true)
     public RegionDto updateRegion(Long id, CreateRegionRequest request) {
         Region region = regionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Région non trouvée avec l'id: " + id));
@@ -70,6 +76,7 @@ public class RegionService {
     }
     
     @Transactional
+    @CacheEvict(value = "regions", allEntries = true)
     public void deleteRegion(Long id) {
         Region region = regionRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Région non trouvée avec l'id: " + id));

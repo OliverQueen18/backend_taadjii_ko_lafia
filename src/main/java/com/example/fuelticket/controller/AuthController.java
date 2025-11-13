@@ -29,9 +29,43 @@ public class AuthController {
 
     @PostMapping("/login")
     @Operation(summary = "User login", description = "Authenticate user and return JWT token")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody AuthRequest authRequest) {
-        AuthResponse response = authService.login(authRequest);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<?> login(@Valid @RequestBody AuthRequest authRequest) {
+        try {
+            AuthResponse response = authService.login(authRequest);
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            // Retourner les informations de sécurité en cas d'erreur
+            Map<String, Object> errorResponse = new HashMap<>();
+            errorResponse.put("success", false);
+            errorResponse.put("message", e.getMessage());
+            
+            // Essayer d'obtenir les informations de sécurité
+            try {
+                Map<String, Object> securityInfo = authService.getLoginSecurityInfo(authRequest.getEmail());
+                errorResponse.putAll(securityInfo);
+                System.out.println("🔵 AuthController.login - Security info added to error response: " + securityInfo);
+            } catch (Exception ex) {
+                System.out.println("⚠️ AuthController.login - Could not get security info: " + ex.getMessage());
+                // Ignorer si l'utilisateur n'existe pas
+            }
+            
+            System.out.println("🔴 AuthController.login - Error response: " + errorResponse);
+            return ResponseEntity.badRequest().body(errorResponse);
+        }
+    }
+    
+    @GetMapping("/login-security-info")
+    @Operation(summary = "Get login security info", description = "Get remaining attempts and lockout status for an email")
+    public ResponseEntity<Map<String, Object>> getLoginSecurityInfo(@RequestParam String email) {
+        try {
+            Map<String, Object> securityInfo = authService.getLoginSecurityInfo(email);
+            return ResponseEntity.ok(securityInfo);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
     }
 
     @PostMapping("/register")

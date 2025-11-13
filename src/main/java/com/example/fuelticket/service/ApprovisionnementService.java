@@ -4,11 +4,11 @@ import com.example.fuelticket.dto.ApprovisionnementDto;
 import com.example.fuelticket.dto.CreateApprovisionnementRequest;
 import com.example.fuelticket.entity.Approvisionnement;
 import com.example.fuelticket.entity.Societe;
-import com.example.fuelticket.entity.Station;
+import com.example.fuelticket.entity.Region;
 import com.example.fuelticket.entity.FuelStock;
 import com.example.fuelticket.repository.ApprovisionnementRepository;
 import com.example.fuelticket.repository.SocieteRepository;
-import com.example.fuelticket.repository.StationRepository;
+import com.example.fuelticket.repository.RegionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +23,7 @@ public class ApprovisionnementService {
     
     private final ApprovisionnementRepository approvisionnementRepository;
     private final SocieteRepository societeRepository;
-    private final StationRepository stationRepository;
+    private final RegionRepository regionRepository;
     
     public List<ApprovisionnementDto> getAllApprovisionnements() {
         return approvisionnementRepository.findAll().stream()
@@ -39,10 +39,10 @@ public class ApprovisionnementService {
                 .collect(Collectors.toList());
     }
     
-    public List<ApprovisionnementDto> getApprovisionnementsByStation(Long stationId) {
-        Station station = stationRepository.findById(stationId)
-                .orElseThrow(() -> new RuntimeException("Station non trouvée avec l'id: " + stationId));
-        return approvisionnementRepository.findByStation(station).stream()
+    public List<ApprovisionnementDto> getApprovisionnementsByRegion(Long regionId) {
+        Region region = regionRepository.findById(regionId)
+                .orElseThrow(() -> new RuntimeException("Région non trouvée avec l'id: " + regionId));
+        return approvisionnementRepository.findByRegion(region).stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
@@ -58,12 +58,12 @@ public class ApprovisionnementService {
         Societe societe = societeRepository.findById(request.getSocieteId())
                 .orElseThrow(() -> new RuntimeException("Société non trouvée avec l'id: " + request.getSocieteId()));
         
-        Station station = stationRepository.findById(request.getStationId())
-                .orElseThrow(() -> new RuntimeException("Station non trouvée avec l'id: " + request.getStationId()));
+        Region region = regionRepository.findById(request.getRegionId())
+                .orElseThrow(() -> new RuntimeException("Région non trouvée avec l'id: " + request.getRegionId()));
         
         Approvisionnement approvisionnement = Approvisionnement.builder()
                 .societe(societe)
-                .station(station)
+                .region(region)
                 .fuelType(request.getFuelType())
                 .quantite(request.getQuantite())
                 .dateApprovisionnement(request.getDateApprovisionnement() != null ? 
@@ -85,11 +85,11 @@ public class ApprovisionnementService {
         Societe societe = societeRepository.findById(request.getSocieteId())
                 .orElseThrow(() -> new RuntimeException("Société non trouvée avec l'id: " + request.getSocieteId()));
         
-        Station station = stationRepository.findById(request.getStationId())
-                .orElseThrow(() -> new RuntimeException("Station non trouvée avec l'id: " + request.getStationId()));
+        Region region = regionRepository.findById(request.getRegionId())
+                .orElseThrow(() -> new RuntimeException("Région non trouvée avec l'id: " + request.getRegionId()));
         
         approvisionnement.setSociete(societe);
-        approvisionnement.setStation(station);
+        approvisionnement.setRegion(region);
         approvisionnement.setFuelType(request.getFuelType());
         approvisionnement.setQuantite(request.getQuantite());
         approvisionnement.setDateApprovisionnement(request.getDateApprovisionnement());
@@ -114,8 +114,9 @@ public class ApprovisionnementService {
         dto.setId(approvisionnement.getId());
         dto.setSocieteId(approvisionnement.getSociete().getId());
         dto.setSocieteNom(approvisionnement.getSociete().getNom());
-        dto.setStationId(approvisionnement.getStation().getId());
-        dto.setStationNom(approvisionnement.getStation().getNom());
+        dto.setRegionId(approvisionnement.getRegion().getId());
+        dto.setRegionNom(approvisionnement.getRegion().getNom());
+        dto.setRegionCode(approvisionnement.getRegion().getCode());
         dto.setFuelType(approvisionnement.getFuelType());
         dto.setFuelTypeDisplayName(approvisionnement.getFuelType().getDisplayName());
         dto.setQuantite(approvisionnement.getQuantite());

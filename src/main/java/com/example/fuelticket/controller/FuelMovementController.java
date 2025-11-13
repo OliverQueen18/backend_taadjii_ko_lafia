@@ -24,7 +24,7 @@ public class FuelMovementController {
 
     @GetMapping("/station/{stationId}")
     @Operation(summary = "Get movements by station", description = "Get all fuel movements for a specific station, ordered by date descending")
-    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<List<FuelMovementDto>> getMovementsByStation(@PathVariable Long stationId) {
         List<FuelMovementDto> movements = fuelMovementService.getMovementsByStation(stationId);
         return ResponseEntity.ok(movements);
@@ -32,7 +32,7 @@ public class FuelMovementController {
 
     @GetMapping("/station/{stationId}/range")
     @Operation(summary = "Get movements by station and date range", description = "Get fuel movements for a station within a date range")
-    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<List<FuelMovementDto>> getMovementsByStationAndDateRange(
             @PathVariable Long stationId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -51,7 +51,7 @@ public class FuelMovementController {
 
     @GetMapping("/stock/{stockId}")
     @Operation(summary = "Get movements by stock", description = "Get all fuel movements for a specific fuel stock")
-    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<List<FuelMovementDto>> getMovementsByStock(@PathVariable Long stockId) {
         List<FuelMovementDto> movements = fuelMovementService.getMovementsByStock(stockId);
         return ResponseEntity.ok(movements);
@@ -59,7 +59,7 @@ public class FuelMovementController {
 
     @PostMapping
     @Operation(summary = "Create movement", description = "Create a new fuel movement")
-    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN')")
+    @PreAuthorize("hasRole('STATION') or hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<FuelMovementDto> createMovement(
             @RequestParam Long stockId,
             @RequestParam FuelMovement.MovementType type,

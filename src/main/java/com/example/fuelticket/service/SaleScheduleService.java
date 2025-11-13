@@ -7,6 +7,8 @@ import com.example.fuelticket.entity.Station;
 import com.example.fuelticket.repository.SaleScheduleRepository;
 import com.example.fuelticket.repository.StationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,6 +26,7 @@ public class SaleScheduleService {
     private final StationRepository stationRepository;
     
     @Transactional
+    @CacheEvict(value = "saleSchedules", allEntries = true)
     public SaleScheduleDto createSaleSchedule(CreateSaleScheduleRequest request) {
         Station station = stationRepository.findById(request.getStationId())
                 .orElseThrow(() -> new RuntimeException("Station non trouvée"));
@@ -61,12 +64,63 @@ public class SaleScheduleService {
         return SaleScheduleDto.fromEntity(savedSchedule);
     }
     
+    @Cacheable(value = "saleSchedules", key = "'station-' + #stationId")
     public List<SaleScheduleDto> getSaleSchedulesByStation(Long stationId) {
         Station station = stationRepository.findById(stationId)
                 .orElseThrow(() -> new RuntimeException("Station non trouvée"));
         
-        return saleScheduleRepository.findByStationAndIsActiveTrue(station).stream()
+        // Retourner tous les schedules (actifs et inactifs) pour permettre l'affichage de toutes les données
+        return saleScheduleRepository.findByStation(station).stream()
                 .map(SaleScheduleDto::fromEntity)
+                .collect(Collectors.toList());
+    }
+    
+    public List<SaleScheduleDto> getAllSaleSchedulesByStation(Long stationId) {
+        Station station = stationRepository.findById(stationId)
+                .orElseThrow(() -> new RuntimeException("Station non trouvée"));
+        
+        return saleScheduleRepository.findByStation(station).stream()
+                .map(SaleScheduleDto::fromEntity)
+                .collect(Collectors.toList());
+    }
+    
+    @Cacheable(value = "saleSchedules", key = "'all'")
+    public List<SaleScheduleDto> getAllSaleSchedules() {
+        // Utiliser une requête avec JOIN FETCH pour éviter LazyInitializationException
+        return saleScheduleRepository.findAllWithRelations().stream()
+                .map(schedule -> {
+                    try {
+                        return SaleScheduleDto.fromEntity(schedule);
+                    } catch (Exception e) {
+                        // En cas d'erreur (ex: LazyInitializationException), créer un DTO basique
+                        System.err.println("Erreur lors de la conversion du schedule: " + e.getMessage());
+                        SaleScheduleDto dto = new SaleScheduleDto();
+                        dto.setId(schedule.getId());
+                        dto.setStationId(schedule.getStation() != null ? schedule.getStation().getId() : null);
+                        dto.setStationName(schedule.getStation() != null ? schedule.getStation().getNom() : null);
+                        dto.setFuelType(schedule.getFuelType());
+                        dto.setFuelTypeDisplayName(schedule.getFuelType() != null ? schedule.getFuelType().getDisplayName() : null);
+                        dto.setSaleDate(schedule.getSaleDate());
+                        dto.setStartTime(schedule.getStartTime());
+                        dto.setEndTime(schedule.getEndTime());
+                        dto.setAvailableQuantity(schedule.getAvailableQuantity());
+                        dto.setMaxQuantityPerTicket(schedule.getMaxQuantityPerTicket());
+                        dto.setMaxTicketsPerDay(schedule.getMaxTicketsPerDay());
+                        dto.setIsActive(schedule.getIsActive());
+                        // Utiliser les valeurs de base si les méthodes calculées échouent
+                        try {
+                            dto.setRemainingQuantity(schedule.getRemainingQuantity());
+                        } catch (Exception ex) {
+                            dto.setRemainingQuantity(schedule.getAvailableQuantity());
+                        }
+                        try {
+                            dto.setRemainingTickets(schedule.getRemainingTickets());
+                        } catch (Exception ex) {
+                            dto.setRemainingTickets(schedule.getMaxTicketsPerDay());
+                        }
+                        return dto;
+                    }
+                })
                 .collect(Collectors.toList());
     }
     
@@ -89,6 +143,7 @@ public class SaleScheduleService {
     }
     
     @Transactional
+    @CacheEvict(value = "saleSchedules", allEntries = true)
     public SaleScheduleDto updateSaleSchedule(Long scheduleId, CreateSaleScheduleRequest request) {
         SaleSchedule schedule = saleScheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new RuntimeException("Planification non trouvée"));
@@ -116,6 +171,7 @@ public class SaleScheduleService {
     }
     
     @Transactional
+    @CacheEvict(value = "saleSchedules", allEntries = true)
     public void deleteSaleSchedule(Long scheduleId) {
         SaleSchedule schedule = saleScheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new RuntimeException("Planification non trouvée"));
@@ -129,6 +185,7 @@ public class SaleScheduleService {
     }
     
     @Transactional
+    @CacheEvict(value = "saleSchedules", allEntries = true)
     public SaleScheduleDto toggleScheduleStatus(Long scheduleId) {
         SaleSchedule schedule = saleScheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new RuntimeException("Planification non trouvée"));

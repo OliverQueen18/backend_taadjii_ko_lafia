@@ -23,7 +23,7 @@ public class UserController {
 
     @GetMapping
     @Operation(summary = "Get all users", description = "Retrieve all users")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('ADMIN') or hasRole('GESTIONNAIRE')")
     public ResponseEntity<List<UserDto>> getAllUsers() {
         List<UserDto> users = userService.getAllUsers();
         return ResponseEntity.ok(users);
